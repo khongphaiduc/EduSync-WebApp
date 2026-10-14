@@ -1,0 +1,6 @@
+{
+  "apiBaseUrl": "https://localhost:7248",
+  "authEndpoint": "/api/auth/login",
+  "environment": "production",
+  "timeoutMs": 15000
+}

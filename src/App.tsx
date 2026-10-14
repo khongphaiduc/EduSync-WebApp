@@ -38,17 +38,41 @@ import type {
 import { FileText, BarChart3, Bell, Download, Award, CheckCircle2, Plus, Users, BookOpen, Layers } from 'lucide-react'
 
 export default function App() {
-  // Authentication state: starts on the Login screen as requested!
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  // Authentication state: tự động khôi phục từ localStorage khi reload trang
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    const token = localStorage.getItem('accessToken')
+    const authFlag = localStorage.getItem('isAuthenticated')
+    return Boolean(token || authFlag === 'true')
+  })
 
-  // Mode switcher: defaults to 'admin' (Phòng Đào Tạo)
-  const [portalMode, setPortalMode] = useState<PortalMode>('admin')
+  // Mode switcher: nhớ mode admin hoặc teacher
+  const [portalMode, setPortalMode] = useState<PortalMode>(() => {
+    const savedMode = localStorage.getItem('portalMode') as PortalMode | null
+    if (savedMode === 'admin' || savedMode === 'teacher') return savedMode
+    try {
+      const savedUser = localStorage.getItem('authUser')
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser)
+        if (parsed.role === 1) return 'admin'
+        if (parsed.role === 2 || parsed.role === 3) return 'teacher'
+      }
+    } catch {
+      // ignore
+    }
+    return 'admin'
+  })
 
-  // Teacher navigation state
-  const [activeTab, setActiveTab] = useState<ActiveNavTab>('dashboard')
+  // Teacher navigation state: nhớ tab hiện tại khi reload
+  const [activeTab, setActiveTab] = useState<ActiveNavTab>(() => {
+    const saved = localStorage.getItem('activeTab') as ActiveNavTab | null
+    return saved || 'dashboard'
+  })
 
-  // Admin navigation state
-  const [adminTab, setAdminTab] = useState<AdminNavTab>('overview')
+  // Admin navigation state: nhớ tab hiện tại khi reload (ví dụ đang ở students thì F5 vẫn ở students)
+  const [adminTab, setAdminTab] = useState<AdminNavTab>(() => {
+    const saved = localStorage.getItem('adminTab') as AdminNavTab | null
+    return saved || 'overview'
+  })
 
   const [searchQuery, setSearchQuery] = useState('')
   const [requests, setRequests] = useState<ApplicationRequest[]>(INITIAL_REQUESTS)
@@ -59,6 +83,24 @@ export default function App() {
   const showToast = (msg: string) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 3500)
+  }
+
+  // Chuyển đổi portal mode và lưu vào localStorage
+  const handleSwitchPortal = (mode: PortalMode) => {
+    setPortalMode(mode)
+    localStorage.setItem('portalMode', mode)
+  }
+
+  // Chuyển đổi admin tab và lưu vào localStorage
+  const handleSelectAdminTab = (tab: AdminNavTab) => {
+    setAdminTab(tab)
+    localStorage.setItem('adminTab', tab)
+  }
+
+  // Chuyển đổi teacher tab và lưu vào localStorage
+  const handleSelectActiveTab = (tab: ActiveNavTab) => {
+    setActiveTab(tab)
+    localStorage.setItem('activeTab', tab)
   }
 
   // Handle request approval
@@ -105,6 +147,13 @@ export default function App() {
   const pendingRequestsCount = requests.filter(r => r.status === 'pending').length
 
   const handleLogout = () => {
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('refreshToken')
+    localStorage.removeItem('authUser')
+    localStorage.removeItem('isAuthenticated')
+    localStorage.removeItem('portalMode')
+    localStorage.removeItem('adminTab')
+    localStorage.removeItem('activeTab')
     setIsAuthenticated(false)
     showToast('Bạn đã đăng xuất khỏi hệ thống Harvard University.')
   }
@@ -117,6 +166,8 @@ export default function App() {
           onLoginSuccess={(mode, userName) => {
             setPortalMode(mode)
             setIsAuthenticated(true)
+            localStorage.setItem('isAuthenticated', 'true')
+            localStorage.setItem('portalMode', mode)
             showToast(`Chào mừng ${userName} đã đăng nhập thành công!`)
           }}
         />
@@ -140,8 +191,8 @@ export default function App() {
           {/* Admin Sidebar */}
           <AdminSidebar
             activeTab={adminTab}
-            setActiveTab={setAdminTab}
-            onSwitchPortal={() => setPortalMode('teacher')}
+            setActiveTab={handleSelectAdminTab}
+            onSwitchPortal={() => handleSwitchPortal('teacher')}
             onLogout={handleLogout}
           />
 
@@ -151,7 +202,7 @@ export default function App() {
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
               onSwitchPortal={() => {
-                setPortalMode('teacher')
+                handleSwitchPortal('teacher')
                 showToast('Đã chuyển sang Cổng Giảng Viên')
               }}
               onLogout={handleLogout}
@@ -165,7 +216,7 @@ export default function App() {
                   newSections={ADMIN_NEW_SECTIONS}
                   activities={ADMIN_ACTIVITIES}
                   recentRequests={ADMIN_RECENT_REQUESTS}
-                  onNavigateTab={tab => setAdminTab(tab)}
+                  onNavigateTab={tab => handleSelectAdminTab(tab)}
                 />
               )}
 
@@ -426,7 +477,7 @@ export default function App() {
         <>
           <Sidebar
             activeTab={activeTab}
-            setActiveTab={setActiveTab}
+            setActiveTab={handleSelectActiveTab}
             pendingRequestsCount={pendingRequestsCount}
             onLogout={handleLogout}
           />
@@ -435,9 +486,9 @@ export default function App() {
             <Header
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
-              onOpenNotifications={() => setActiveTab('notifications')}
+              onOpenNotifications={() => handleSelectActiveTab('notifications')}
               onSwitchPortal={() => {
-                setPortalMode('admin')
+                handleSwitchPortal('admin')
                 showToast('Đã chuyển sang Cổng Phòng Đào Tạo (Admin)')
               }}
             />
@@ -449,7 +500,7 @@ export default function App() {
                   classes={MY_CLASSES}
                   requests={requests}
                   onViewRequest={req => setSelectedRequest(req)}
-                  onNavigateTab={tab => setActiveTab(tab)}
+                  onNavigateTab={tab => handleSelectActiveTab(tab)}
                   pendingCount={pendingRequestsCount}
                 />
               )}

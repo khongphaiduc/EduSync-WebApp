@@ -103,3 +103,47 @@ export interface ActivityEvent {
   color: 'blue' | 'pink' | 'orange' | 'purple'
 }
 
+export interface AuthUserData {
+  userId: string
+  email: string
+  role: 1 | 2 | 3 // 1: Admin, 2: Lecturer, 3: Student
+  accessToken: string
+  accessTokenExpiresAtUtc: string
+  refreshToken: string
+  refreshTokenExpiresAtUtc: string
+}
+
+export interface LoginApiResponse {
+  success: boolean
+  message: string
+  data?: AuthUserData
+}
+
+export interface ApiStudentItem {
+  id: string
+  studentCode: string
+  fullName: string
+  email: string
+  majorId: string
+  majorName: string
+  enrollmentYear: number
+  status: string
+  avatarUrl: string | null
+}
+
+export interface ApiStudentListData {
+  items: ApiStudentItem[]
+  page: number
+  pageSize: number
+  totalCount: number
+}
+
+export interface ApiStudentListResponse {
+  success: boolean
+  message: string
+  data?: ApiStudentListData
+}
+
+
+
+

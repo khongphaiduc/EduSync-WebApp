@@ -64,31 +64,28 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ classes, onOpenGradebo
         <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
           <button
             onClick={() => setFilterStatus('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-              filterStatus === 'all'
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${filterStatus === 'all'
                 ? 'bg-white text-slate-800 shadow-xs'
                 : 'text-slate-500 hover:text-slate-700'
-            }`}
+              }`}
           >
             Tất cả ({classes.length})
           </button>
           <button
             onClick={() => setFilterStatus('active')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-              filterStatus === 'active'
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${filterStatus === 'active'
                 ? 'bg-white text-slate-800 shadow-xs'
                 : 'text-slate-500 hover:text-slate-700'
-            }`}
+              }`}
           >
             Đang học (3)
           </button>
           <button
             onClick={() => setFilterStatus('upcoming')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-              filterStatus === 'upcoming'
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${filterStatus === 'upcoming'
                 ? 'bg-white text-slate-800 shadow-xs'
                 : 'text-slate-500 hover:text-slate-700'
-            }`}
+              }`}
           >
             Chưa bắt đầu (1)
           </button>
@@ -113,11 +110,10 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ classes, onOpenGradebo
                 </div>
 
                 <span
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${
-                    cls.status === 'active'
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${cls.status === 'active'
                       ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                       : 'bg-slate-100 text-slate-500 border border-slate-200'
-                  }`}
+                    }`}
                 >
                   {cls.statusText}
                 </span>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Award,
   Plus,
@@ -7,254 +7,581 @@ import {
   GraduationCap,
   Mail,
   Phone,
-  BookOpen,
   LayoutGrid,
   List,
   CheckCircle2,
   X,
-  UserCheck
+  UserCheck,
+  UserX,
+  RefreshCw,
+  AlertCircle,
+  ShieldAlert,
+  Lock,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Copy,
+  Server,
+  Key
 } from 'lucide-react'
+import type { ApiLecturerItem, ApiLecturerListResponse, CreateLecturerResponse } from '../../types'
+import { API_BASE_URL } from '../../config'
 
-interface TeacherItem {
-  id: string
-  code: string
-  name: string
-  title: string
-  faculty: string
-  department: string
-  email: string
-  phone: string
-  avatar: string
-  assignedClassesCount: number
-  teachingQuotaPercent: number
-  status: 'active' | 'leave'
-}
-
-const INITIAL_TEACHERS: TeacherItem[] = [
+// Dữ liệu mẫu dùng cho chế độ xem trước (Offline Demo Preview) khi backend chưa khởi động
+const MOCK_DEMO_LECTURERS: ApiLecturerItem[] = [
   {
-    id: 'tch-1',
-    code: 'GV001',
-    name: 'ThS. Nguyễn Văn An',
-    title: 'Thạc sĩ',
-    faculty: 'Khoa CNTT',
-    department: 'Bộ môn Kỹ thuật Phần mềm',
-    email: 'an.nguyen@harvard.edu.vn',
-    phone: '0903 123 456',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    assignedClassesCount: 4,
-    teachingQuotaPercent: 100,
-    status: 'active'
+    id: '00000000-0000-0000-0000-000000000001',
+    userId: '00000000-0000-0000-0000-000000000002',
+    lecturerCode: 'GV001',
+    fullName: 'Nguyễn Văn An',
+    email: 'giangvien@example.com',
+    phone: '0900000000',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    isActive: true
   },
   {
-    id: 'tch-2',
-    code: 'GV002',
-    name: 'TS. Trần Thị Mai',
-    title: 'Tiến sĩ',
-    faculty: 'Khoa CNTT',
-    department: 'Bộ môn Khoa học Máy tính',
-    email: 'mai.tran@harvard.edu.vn',
-    phone: '0912 888 999',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    assignedClassesCount: 3,
-    teachingQuotaPercent: 100,
-    status: 'active'
+    id: '00000000-0000-0000-0000-000000000003',
+    userId: '00000000-0000-0000-0000-000000000004',
+    lecturerCode: 'GV002',
+    fullName: 'Trần Thị Mai',
+    email: 'mai.tran@example.com',
+    phone: '0912888999',
+    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+    isActive: true
   },
   {
-    id: 'tch-3',
-    code: 'GV003',
-    name: 'ThS. Lê Quang Huy',
-    title: 'Thạc sĩ',
-    faculty: 'Khoa Kinh tế',
-    department: 'Bộ môn Quản trị Kinh doanh',
-    email: 'huy.le@harvard.edu.vn',
-    phone: '0988 777 666',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    assignedClassesCount: 5,
-    teachingQuotaPercent: 110,
-    status: 'active'
+    id: '00000000-0000-0000-0000-000000000005',
+    userId: '00000000-0000-0000-0000-000000000006',
+    lecturerCode: 'GV003',
+    fullName: 'Lê Quang Huy',
+    email: 'huy.le@example.com',
+    phone: '0988777666',
+    avatarUrl: null,
+    isActive: true
   },
   {
-    id: 'tch-4',
-    code: 'GV004',
-    name: 'PGS.TS. Đỗ Hoàng Long',
-    title: 'Phó Giáo sư',
-    faculty: 'Khoa CNTT',
-    department: 'Bộ môn Hệ thống Thông tin',
-    email: 'long.do@harvard.edu.vn',
-    phone: '0908 555 444',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    assignedClassesCount: 3,
-    teachingQuotaPercent: 95,
-    status: 'active'
+    id: '00000000-0000-0000-0000-000000000007',
+    userId: '00000000-0000-0000-0000-000000000008',
+    lecturerCode: 'GV004',
+    fullName: 'Đỗ Hoàng Long',
+    email: 'long.do@example.com',
+    phone: '0908555444',
+    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    isActive: false
   },
   {
-    id: 'tch-5',
-    code: 'GV005',
-    name: 'TS. Vũ Phương Thảo',
-    title: 'Tiến sĩ',
-    faculty: 'Khoa Ngoại ngữ',
-    department: 'Bộ môn Tiếng Anh Chuyên ngành',
-    email: 'thao.vu@harvard.edu.vn',
-    phone: '0977 123 789',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-    assignedClassesCount: 4,
-    teachingQuotaPercent: 105,
-    status: 'active'
-  },
-  {
-    id: 'tch-6',
-    code: 'GV006',
-    name: 'GS.TS. Phạm Quốc Bảo',
-    title: 'Giáo sư',
-    faculty: 'Khoa Luật & Chính sách',
-    department: 'Bộ môn Luật Kinh tế',
-    email: 'bao.pham@harvard.edu.vn',
-    phone: '0913 456 789',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
-    assignedClassesCount: 2,
-    teachingQuotaPercent: 90,
-    status: 'active'
+    id: '00000000-0000-0000-0000-000000000009',
+    userId: '00000000-0000-0000-0000-000000000010',
+    lecturerCode: 'GV005',
+    fullName: 'Vũ Phương Thảo',
+    email: 'thao.vu@example.com',
+    phone: '0977123789',
+    avatarUrl: null,
+    isActive: true
   }
 ]
 
 export const AdminTeachersView: React.FC = () => {
-  const [teachers, setTeachers] = useState<TeacherItem[]>(INITIAL_TEACHERS)
+  // Trạng thái dữ liệu danh sách giảng viên từ API
+  const [lecturers, setLecturers] = useState<ApiLecturerItem[]>([])
+  const [page, setPage] = useState<number>(1)
+  const [pageSize, setPageSize] = useState<number>(20)
+  const [totalCount, setTotalCount] = useState<number>(0)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+
+  // Trạng thái HTTP & Lỗi
+  const [httpStatus, setHttpStatus] = useState<number | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false)
+
+  // Cấu hình Base URL API
+  const [baseUrl] = useState<string>(API_BASE_URL || 'https://localhost:7248')
+
+  // Tìm kiếm và bộ lọc client
   const [search, setSearch] = useState('')
-  const [facultyFilter, setFacultyFilter] = useState('ALL')
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL')
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
-  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  // Modal xem chi tiết và thêm mới
+  const [selectedLecturer, setSelectedLecturer] = useState<ApiLecturerItem | null>(null)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
-  const [newTeacher, setNewTeacher] = useState({
-    code: '',
-    name: '',
-    title: 'Tiến sĩ',
-    faculty: 'Khoa CNTT',
-    department: 'Bộ môn Kỹ thuật Phần mềm',
+  // Form thêm giảng viên mới
+  const [newLecturer, setNewLecturer] = useState({
+    lecturerCode: '',
+    fullName: '',
     email: '',
+    password: 'Password123!',
     phone: ''
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 3000)
   }
 
-  const filteredTeachers = teachers.filter(t => {
-    const matchesSearch =
-      t.name.toLowerCase().includes(search.toLowerCase()) ||
-      t.code.toLowerCase().includes(search.toLowerCase()) ||
-      t.department.toLowerCase().includes(search.toLowerCase())
-    const matchesFaculty = facultyFilter === 'ALL' || t.faculty === facultyFilter
-    return matchesSearch && matchesFaculty
-  })
+  // Hàm gọi API GET api/lecturers?page=1&pageSize=20
+  const fetchLecturers = useCallback(
+    async (targetPage = page, targetPageSize = pageSize) => {
+      setIsLoading(true)
+      setErrorMessage(null)
+      setHttpStatus(null)
 
-  const handleCreateTeacher = (e: React.FormEvent) => {
+      const token = localStorage.getItem('accessToken')
+
+      // Kiểm tra có token hay không
+      if (!token) {
+        setIsLoading(false)
+        setHttpStatus(401)
+        setErrorMessage('Thiếu token xác thực (401 Unauthorized). Bạn cần đăng nhập với tài khoản Quản trị viên (Admin) để có quyền truy cập.')
+        return
+      }
+
+      try {
+        const cleanBase = baseUrl.replace(/\/+$/, '')
+        const endpoint = `${cleanBase}/api/lecturers?page=${targetPage}&pageSize=${targetPageSize}`
+
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        })
+
+        setHttpStatus(response.status)
+
+        // 401: Thiếu hoặc sai token
+        if (response.status === 401) {
+          setErrorMessage('Thiếu hoặc sai token xác thực (401 Unauthorized). Phiên làm việc đã hết hạn hoặc token không hợp lệ.')
+          setLecturers([])
+          setIsDemoMode(false)
+          return
+        }
+
+        // 403: Không có quyền Admin
+        if (response.status === 403) {
+          setErrorMessage('Không có quyền truy cập (403 Forbidden). Token này không thuộc tài khoản Quản trị viên (Role = 1 / Admin).')
+          setLecturers([])
+          setIsDemoMode(false)
+          return
+        }
+
+        if (!response.ok) {
+          let errDetail = `Lỗi máy chủ HTTP ${response.status} (${response.statusText})`
+          try {
+            const errJson = await response.json()
+            if (errJson.message) errDetail = errJson.message
+          } catch {
+            // bỏ qua parse lỗi
+          }
+          setErrorMessage(errDetail)
+          return
+        }
+
+        const resData: ApiLecturerListResponse = await response.json()
+
+        if (resData.success && resData.data) {
+          setLecturers(resData.data.items || [])
+          setPage(resData.data.page || targetPage)
+          setPageSize(resData.data.pageSize || targetPageSize)
+          setTotalCount(resData.data.totalCount || 0)
+          setIsDemoMode(false)
+        } else {
+          setErrorMessage(resData.message || 'Không thể lấy danh sách giảng viên từ API.')
+        }
+      } catch (err: unknown) {
+        console.error('Lỗi khi gọi API lecturers:', err)
+        setHttpStatus(0)
+        setErrorMessage(
+          `Không thể kết nối đến máy chủ API (${baseUrl}). Vui lòng kiểm tra backend ASP.NET Core đang chạy hoặc bật chế độ xem trước dữ liệu mẫu.`
+        )
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [page, pageSize, baseUrl]
+  )
+
+  // Gọi API lần đầu khi component mount
+  useEffect(() => {
+    fetchLecturers(1, pageSize)
+  }, [fetchLecturers, pageSize])
+
+  // Kích hoạt chế độ demo preview khi backend chưa chạy
+  const handleEnableDemoMode = () => {
+    setIsDemoMode(true)
+    setLecturers(MOCK_DEMO_LECTURERS)
+    setPage(1)
+    setPageSize(20)
+    setTotalCount(MOCK_DEMO_LECTURERS.length)
+    setErrorMessage(null)
+    setHttpStatus(200)
+    showToast('Đã tải danh sách giảng viên mẫu (Chế độ xem trước)')
+  }
+
+  // Danh sách giảng viên sau khi lọc tìm kiếm và trạng thái
+  const filteredLecturers = useMemo(() => {
+    return lecturers.filter(item => {
+      const q = search.trim().toLowerCase()
+      const matchesSearch =
+        !q ||
+        item.fullName.toLowerCase().includes(q) ||
+        item.lecturerCode.toLowerCase().includes(q) ||
+        item.email.toLowerCase().includes(q) ||
+        (item.phone && item.phone.toLowerCase().includes(q))
+
+      const matchesStatus =
+        statusFilter === 'ALL' ||
+        (statusFilter === 'ACTIVE' && item.isActive) ||
+        (statusFilter === 'INACTIVE' && !item.isActive)
+
+      return matchesSearch && matchesStatus
+    })
+  }, [lecturers, search, statusFilter])
+
+  // Tính số trang
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+
+  // Chuyển trang
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return
+    if (isDemoMode) {
+      setPage(newPage)
+    } else {
+      fetchLecturers(newPage, pageSize)
+    }
+  }
+
+  // Xử lý tạo giảng viên - Gọi POST /api/lecturers
+  const handleCreateLecturer = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newTeacher.name || !newTeacher.email || !newTeacher.code) {
-      alert('Vui lòng điền đầy đủ các thông tin bắt buộc.')
+    setFormError(null)
+
+    if (!newLecturer.lecturerCode.trim() || !newLecturer.fullName.trim() || !newLecturer.email.trim()) {
+      setFormError('Vui lòng điền đầy đủ các thông tin bắt buộc (Mã GV, Họ và tên, Email).')
       return
     }
 
-    const created: TeacherItem = {
-      id: `tch-${Date.now()}`,
-      code: newTeacher.code,
-      name: `${newTeacher.title}. ${newTeacher.name}`,
-      title: newTeacher.title,
-      faculty: newTeacher.faculty,
-      department: newTeacher.department,
-      email: newTeacher.email,
-      phone: newTeacher.phone || '0900 000 000',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-      assignedClassesCount: 0,
-      teachingQuotaPercent: 0,
-      status: 'active'
+    if (!newLecturer.password || newLecturer.password.length < 6) {
+      setFormError('Mật khẩu phải có ít nhất 6 ký tự.')
+      return
     }
 
-    setTeachers([created, ...teachers])
-    setIsModalOpen(false)
-    showToast(`Đã thêm giảng viên ${created.name} vào hệ thống!`)
-    setNewTeacher({
-      code: '',
-      name: '',
-      title: 'Tiến sĩ',
-      faculty: 'Khoa CNTT',
-      department: 'Bộ môn Kỹ thuật Phần mềm',
-      email: '',
-      phone: ''
-    })
+    const token = localStorage.getItem('accessToken')
+
+    // Chế độ demo hoặc chưa có token
+    if (isDemoMode || !token) {
+      const created: ApiLecturerItem = {
+        id: `00000000-0000-0000-0000-${Date.now().toString().slice(-12)}`,
+        userId: `00000000-0000-0000-0000-${(Date.now() + 1).toString().slice(-12)}`,
+        lecturerCode: newLecturer.lecturerCode.trim().toUpperCase(),
+        fullName: newLecturer.fullName.trim(),
+        email: newLecturer.email.trim(),
+        phone: newLecturer.phone.trim() || '0900000002',
+        avatarUrl: null,
+        isActive: true
+      }
+
+      setLecturers(prev => [created, ...prev])
+      setTotalCount(prev => prev + 1)
+      setIsAddModalOpen(false)
+      showToast(`Đã thêm giảng viên ${created.fullName} (${created.lecturerCode}) thành công! (Dữ liệu thử nghiệm)`)
+      setNewLecturer({
+        lecturerCode: '',
+        fullName: '',
+        email: '',
+        password: 'Password123!',
+        phone: ''
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const cleanBase = baseUrl.replace(/\/+$/, '')
+      const endpoint = `${cleanBase}/api/lecturers`
+
+      const payload = {
+        email: newLecturer.email.trim(),
+        password: newLecturer.password,
+        lecturerCode: newLecturer.lecturerCode.trim().toUpperCase(),
+        fullName: newLecturer.fullName.trim(),
+        phone: newLecturer.phone.trim() || '0900000002'
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      // HTTP 409 Conflict: Email already exists
+      if (response.status === 409) {
+        let errDetail = 'Email đã tồn tại trong hệ thống (409 Conflict).'
+        try {
+          const errJson = await response.json()
+          if (errJson.message) errDetail = errJson.message
+        } catch {
+          // ignore
+        }
+        setFormError(errDetail)
+        return
+      }
+
+      // HTTP 400 Bad Request
+      if (response.status === 400) {
+        let errDetail = 'Dữ liệu không hợp lệ (400 Bad Request).'
+        try {
+          const errJson = await response.json()
+          if (errJson.message) errDetail = errJson.message
+        } catch {
+          // ignore
+        }
+        setFormError(errDetail)
+        return
+      }
+
+      // HTTP 401 Unauthorized
+      if (response.status === 401) {
+        setFormError('Phiên làm việc đã hết hạn hoặc không có quyền truy cập (401 Unauthorized).')
+        return
+      }
+
+      // HTTP 403 Forbidden
+      if (response.status === 403) {
+        setFormError('Tài khoản không có quyền tạo giảng viên (403 Forbidden).')
+        return
+      }
+
+      if (!response.ok) {
+        let errDetail = `Lỗi yêu cầu HTTP ${response.status} (${response.statusText})`
+        try {
+          const errJson = await response.json()
+          if (errJson.message) errDetail = errJson.message
+        } catch {
+          // ignore
+        }
+        setFormError(errDetail)
+        return
+      }
+
+      // HTTP 201 Created
+      const resData: CreateLecturerResponse = await response.json()
+
+      if (resData.success && resData.data) {
+        setLecturers(prev => [resData.data!, ...prev])
+        setTotalCount(prev => prev + 1)
+        setIsAddModalOpen(false)
+        showToast(`Đã tạo giảng viên ${resData.data.fullName} (${resData.data.lecturerCode}) thành công!`)
+        setNewLecturer({
+          lecturerCode: '',
+          fullName: '',
+          email: '',
+          password: 'Password123!',
+          phone: ''
+        })
+      } else {
+        setFormError(resData.message || 'Không thể tạo giảng viên.')
+      }
+    } catch (err: unknown) {
+      console.error('Lỗi khi gọi API POST /api/lecturers:', err)
+      setFormError(`Không thể kết nối đến máy chủ API (${baseUrl}). Vui lòng kiểm tra backend hoặc thử lại.`)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard?.writeText(text)
+    showToast(`Đã sao chép ${label}`)
+  }
+
+  // Render Avatar với Fallback ký tự đầu nếu không có ảnh
+  const renderAvatar = (name: string, url: string | null, size = 'md') => {
+    const sizeClasses = size === 'lg' ? 'w-16 h-16 text-lg' : size === 'sm' ? 'w-8 h-8 text-xs' : 'w-12 h-12 text-sm'
+    if (url) {
+      return (
+        <img
+          src={url}
+          alt={name}
+          className={`${sizeClasses} rounded-2xl object-cover ring-2 ring-slate-100 shrink-0`}
+        />
+      )
+    }
+    const initials = name
+      .split(' ')
+      .filter(Boolean)
+      .slice(-2)
+      .map(part => part[0])
+      .join('')
+      .toUpperCase() || 'GV'
+
+    return (
+      <div
+        className={`${sizeClasses} rounded-2xl bg-gradient-to-br from-rose-500 to-indigo-600 text-white font-bold flex items-center justify-center ring-2 ring-slate-100 shrink-0 shadow-xs`}
+      >
+        {initials}
+      </div>
+    )
+  }
+
+  // Thống kê nhanh
+  const activeCount = lecturers.filter(l => l.isActive).length
+  const inactiveCount = lecturers.filter(l => !l.isActive).length
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
+      {/* Top Header Card */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
-              <Award className="w-5 h-5" />
-            </div>
-            Danh Sách 86 Giảng Viên Toàn Trường
-          </h1>
-          <p className="text-xs text-slate-400 mt-1 pl-12.5">
-            Quản lý định mức giờ giảng dạy, học hàm học vị, phân công bộ môn và hồ sơ khoa học
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                <Award className="w-5 h-5" />
+              </div>
+              Quản Lý Giảng Viên Toàn Trường
+            </h1>
+            {isDemoMode && (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
+                Dữ liệu mẫu (Demo)
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 mt-1 pl-12.5 flex items-center gap-2">
+            <span>Danh sách giảng viên từ endpoint API:</span>
+            <code className="text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded font-mono text-[11px]">
+              api/lecturers?page={page}&pageSize={pageSize}
+            </code>
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => fetchLecturers(page, pageSize)}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
+            title="Làm mới dữ liệu từ server"
+          >
+            <RefreshCw className={`w-4 h-4 text-slate-500 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>Tải lại</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setFormError(null)
+              setIsAddModalOpen(true)
+            }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-md shadow-rose-600/20 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Thêm giảng viên</span>
+            <span>Thêm giảng viên mới</span>
           </button>
         </div>
       </div>
 
-      {/* Metrics Row */}
+      {/* Thông báo lỗi / Auth Alert nếu có */}
+      {errorMessage && (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-rose-800 animate-in fade-in duration-200">
+          <div className="flex items-start gap-3">
+            {httpStatus === 401 ? (
+              <Lock className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            ) : httpStatus === 403 ? (
+              <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            )}
+            <div>
+              <p className="font-bold text-rose-900">
+                {httpStatus === 401
+                  ? 'Chưa đăng nhập / Phiên làm việc hết hạn (401)'
+                  : httpStatus === 403
+                  ? 'Không đủ quyền hạn (403 Forbidden)'
+                  : 'Lỗi khi gọi API giảng viên'}
+              </p>
+              <p className="text-rose-700 mt-0.5 leading-relaxed">{errorMessage}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              onClick={() => fetchLecturers(page, pageSize)}
+              className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-semibold text-[11px] transition-colors cursor-pointer"
+            >
+              Thử lại
+            </button>
+            {!isDemoMode && (
+              <button
+                onClick={handleEnableDemoMode}
+                className="px-3 py-1.5 rounded-lg bg-white border border-rose-200 hover:bg-rose-100/50 text-rose-800 font-semibold text-[11px] transition-colors cursor-pointer"
+              >
+                Xem dữ liệu mẫu
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 4 Stat Overview Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[11px] text-slate-400 font-medium block">Tổng giảng viên</span>
-            <span className="text-2xl font-black text-slate-800 leading-tight">86</span>
-            <span className="text-[10px] text-emerald-600 font-medium block mt-1">100% đạt chuẩn Bộ GD&ĐT</span>
+            <span className="text-2xl font-black text-slate-800 leading-tight">
+              {isLoading ? '...' : totalCount}
+            </span>
+            <span className="text-[10px] text-emerald-600 font-medium block mt-1">Đã lưu trong hệ thống</span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center">
-            <GraduationCap className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-[11px] text-slate-400 font-medium block">Giáo sư & Phó GS</span>
-            <span className="text-2xl font-black text-purple-700 leading-tight">14</span>
-            <span className="text-[10px] text-purple-600 font-medium block mt-1">Chiếm 16.2% tổng số</span>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
             <Award className="w-5 h-5" />
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[11px] text-slate-400 font-medium block">Tiến sĩ (PhD)</span>
-            <span className="text-2xl font-black text-blue-600 leading-tight">42</span>
-            <span className="text-[10px] text-blue-500 font-medium block mt-1">Chiếm 48.8% tổng số</span>
+            <span className="text-[11px] text-slate-400 font-medium block">Đang công tác</span>
+            <span className="text-2xl font-black text-emerald-600 leading-tight">
+              {isLoading ? '...' : activeCount}
+            </span>
+            <span className="text-[10px] text-slate-500 font-medium block mt-1">Hoạt động bình thường</span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-            <BookOpen className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <UserCheck className="w-5 h-5" />
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[11px] text-slate-400 font-medium block">Thạc sĩ (Master)</span>
-            <span className="text-2xl font-black text-slate-800 leading-tight">30</span>
-            <span className="text-[10px] text-slate-500 font-medium block mt-1">12 đang làm NCS</span>
+            <span className="text-[11px] text-slate-400 font-medium block">Tạm dừng / Khóa</span>
+            <span className="text-2xl font-black text-slate-700 leading-tight">
+              {isLoading ? '...' : inactiveCount}
+            </span>
+            <span className="text-[10px] text-slate-400 font-medium block mt-1">Nghỉ phép hoặc tạm ngưng</span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-            <UserCheck className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
+            <UserX className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] text-slate-400 font-medium block">Phân trang API</span>
+            <span className="text-2xl font-black text-rose-600 leading-tight">
+              {page} / {totalPages}
+            </span>
+            <span className="text-[10px] text-slate-400 font-medium block mt-1">Kích cỡ {pageSize} bản ghi/trang</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <GraduationCap className="w-5 h-5" />
           </div>
         </div>
       </div>
@@ -266,7 +593,7 @@ export const AdminTeachersView: React.FC = () => {
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Tìm theo tên giảng viên, mã số, bộ môn..."
+              placeholder="Tìm theo mã GV, họ tên, email, SĐT..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-9.5 pr-4 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
@@ -276,15 +603,13 @@ export const AdminTeachersView: React.FC = () => {
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
             <select
-              value={facultyFilter}
-              onChange={e => setFacultyFilter(e.target.value)}
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE')}
               className="px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:border-rose-500 cursor-pointer"
             >
-              <option value="ALL">Tất cả các khoa</option>
-              <option value="Khoa CNTT">Khoa CNTT</option>
-              <option value="Khoa Kinh tế">Khoa Kinh tế</option>
-              <option value="Khoa Ngoại ngữ">Khoa Ngoại ngữ</option>
-              <option value="Khoa Luật & Chính sách">Khoa Luật & Chính sách</option>
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="ACTIVE">Đang công tác</option>
+              <option value="INACTIVE">Tạm dừng / Khóa</option>
             </select>
           </div>
         </div>
@@ -312,79 +637,107 @@ export const AdminTeachersView: React.FC = () => {
         </div>
       </div>
 
-      {/* Teachers Content: Grid Mode */}
-      {viewMode === 'grid' ? (
+      {/* Loading Skeleton */}
+      {isLoading ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center shadow-xs flex flex-col items-center justify-center space-y-3">
+          <div className="w-10 h-10 border-3 border-rose-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-semibold text-slate-600">Đang tải danh sách giảng viên từ API...</p>
+          <p className="text-[11px] text-slate-400">api/lecturers?page={page}&pageSize={pageSize}</p>
+        </div>
+      ) : filteredLecturers.length === 0 ? (
+        /* Empty State */
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center shadow-xs">
+          <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+            <Award className="w-6 h-6" />
+          </div>
+          <h3 className="font-bold text-slate-800 text-sm">Không tìm thấy giảng viên nào</h3>
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            {search ? 'Không có kết quả phù hợp với bộ lọc tìm kiếm.' : 'Hệ thống chưa có hồ sơ giảng viên nào hoặc chưa kết nối được dữ liệu.'}
+          </p>
+          {!isDemoMode && lecturers.length === 0 && (
+            <button
+              onClick={handleEnableDemoMode}
+              className="mt-4 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors cursor-pointer inline-flex items-center gap-2"
+            >
+              <Server className="w-3.5 h-3.5" />
+              <span>Bật chế độ dữ liệu mẫu</span>
+            </button>
+          )}
+        </div>
+      ) : viewMode === 'grid' ? (
+        /* Grid Mode */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredTeachers.map(teacher => (
+          {filteredLecturers.map(lecturer => (
             <div
-              key={teacher.id}
-              className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between"
+              key={lecturer.id}
+              onClick={() => setSelectedLecturer(lecturer)}
+              className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group hover:border-rose-200"
             >
               <div>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={teacher.avatar}
-                      alt={teacher.name}
-                      className="w-13 h-13 rounded-2xl object-cover ring-2 ring-slate-100 shrink-0"
-                    />
+                    {renderAvatar(lecturer.fullName, lecturer.avatarUrl, 'md')}
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                          {teacher.code}
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                          {lecturer.lecturerCode}
                         </span>
-                        <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                          Đang công tác
+                        <span
+                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                            lecturer.isActive
+                              ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/60'
+                              : 'text-slate-500 bg-slate-100 border border-slate-200'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              lecturer.isActive ? 'bg-emerald-500' : 'bg-slate-400'
+                            }`}
+                          />
+                          {lecturer.isActive ? 'Đang công tác' : 'Tạm dừng'}
                         </span>
                       </div>
-                      <h3 className="font-bold text-slate-800 text-sm mt-1">{teacher.name}</h3>
-                      <p className="text-[11px] text-rose-600 font-medium">{teacher.faculty}</p>
+                      <h3 className="font-bold text-slate-800 text-sm mt-1.5 group-hover:text-rose-600 transition-colors">
+                        {lecturer.fullName}
+                      </h3>
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 text-xs text-slate-600">
                   <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                    <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="truncate">{teacher.department}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
                     <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="truncate">{teacher.email}</span>
+                    <span className="truncate">{lecturer.email}</span>
                   </div>
                   <div className="flex items-center gap-2 text-[11px] text-slate-500">
                     <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>{teacher.phone}</span>
+                    <span>{lecturer.phone || 'Chưa cập nhật'}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Teaching Quota Progress */}
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="text-slate-500 text-[11px]">Định mức giảng dạy:</span>
-                  <span
-                    className={`font-bold text-[11px] ${
-                      teacher.teachingQuotaPercent >= 100 ? 'text-emerald-600' : 'text-amber-600'
-                    }`}
-                  >
-                    {teacher.teachingQuotaPercent}% ({teacher.assignedClassesCount} lớp)
-                  </span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${
-                      teacher.teachingQuotaPercent >= 100 ? 'bg-emerald-500' : 'bg-amber-500'
-                    }`}
-                    style={{ width: `${Math.min(teacher.teachingQuotaPercent, 100)}%` }}
-                  ></div>
-                </div>
+              {/* Footer info: User ID */}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                <span className="truncate max-w-[170px]" title={lecturer.userId}>
+                  UID: {lecturer.userId}
+                </span>
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation()
+                    setSelectedLecturer(lecturer)
+                  }}
+                  className="text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Chi tiết</span>
+                </button>
               </div>
             </div>
           ))}
         </div>
       ) : (
-        /* Table View */
+        /* Table Mode */
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
@@ -392,44 +745,68 @@ export const AdminTeachersView: React.FC = () => {
                 <tr>
                   <th className="py-3 px-4 font-bold">Mã GV</th>
                   <th className="py-3 px-4 font-bold">Họ và tên</th>
-                  <th className="py-3 px-4 font-bold">Khoa / Bộ môn</th>
                   <th className="py-3 px-4 font-bold">Email</th>
-                  <th className="py-3 px-4 font-bold text-center">Số lớp phụ trách</th>
-                  <th className="py-3 px-4 font-bold text-center">Tải giảng dạy</th>
+                  <th className="py-3 px-4 font-bold">Số điện thoại</th>
+                  <th className="py-3 px-4 font-bold">User ID</th>
                   <th className="py-3 px-4 font-bold text-center">Trạng thái</th>
+                  <th className="py-3 px-4 font-bold text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredTeachers.map(t => (
-                  <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-semibold text-slate-600">{t.code}</td>
+                {filteredLecturers.map(lecturer => (
+                  <tr key={lecturer.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4 font-semibold text-slate-700">
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px] font-bold">
+                        {lecturer.lecturerCode}
+                      </span>
+                    </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2.5">
-                        <img src={t.avatar} alt={t.name} className="w-8 h-8 rounded-full object-cover" />
-                        <span className="font-bold text-slate-800">{t.name}</span>
+                        {renderAvatar(lecturer.fullName, lecturer.avatarUrl, 'sm')}
+                        <span className="font-bold text-slate-800">{lecturer.fullName}</span>
                       </div>
                     </td>
-                    <td className="py-3 px-4">
-                      <div className="text-slate-800 font-medium">{t.faculty}</div>
-                      <div className="text-[11px] text-slate-400">{t.department}</div>
+                    <td className="py-3 px-4 text-slate-600">
+                      <div className="flex items-center gap-1.5">
+                        <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span>{lecturer.email}</span>
+                      </div>
                     </td>
-                    <td className="py-3 px-4 text-slate-600">{t.email}</td>
-                    <td className="py-3 px-4 text-center font-bold text-slate-700">{t.assignedClassesCount} lớp</td>
+                    <td className="py-3 px-4 text-slate-600">
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span>{lecturer.phone || '—'}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                      <span className="truncate max-w-[120px] inline-block" title={lecturer.userId}>
+                        {lecturer.userId}
+                      </span>
+                    </td>
                     <td className="py-3 px-4 text-center">
                       <span
-                        className={`font-bold px-2 py-0.5 rounded text-[11px] ${
-                          t.teachingQuotaPercent >= 100
-                            ? 'bg-emerald-50 text-emerald-600'
-                            : 'bg-amber-50 text-amber-600'
+                        className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md ${
+                          lecturer.isActive
+                            ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/60'
+                            : 'text-slate-500 bg-slate-100 border border-slate-200'
                         }`}
                       >
-                        {t.teachingQuotaPercent}%
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            lecturer.isActive ? 'bg-emerald-500' : 'bg-slate-400'
+                          }`}
+                        />
+                        {lecturer.isActive ? 'Đang công tác' : 'Tạm dừng'}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-center">
-                      <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
-                        Đang công tác
-                      </span>
+                      <button
+                        onClick={() => setSelectedLecturer(lecturer)}
+                        className="px-2.5 py-1 rounded-lg text-rose-600 hover:bg-rose-50 font-semibold text-xs transition-colors cursor-pointer inline-flex items-center gap-1"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Xem</span>
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -439,8 +816,159 @@ export const AdminTeachersView: React.FC = () => {
         </div>
       )}
 
+      {/* Pagination Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <div>
+          <span>
+            Hiển thị <b>{filteredLecturers.length}</b> / <b>{totalCount}</b> giảng viên
+          </span>
+          <span className="text-slate-300 mx-2">•</span>
+          <span>
+            Trang <b>{page}</b> / <b>{totalPages}</b>
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePageChange(page - 1)}
+            disabled={page <= 1 || isLoading}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 font-medium transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Trang trước</span>
+          </button>
+
+          <span className="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 font-bold border border-rose-100">
+            {page}
+          </span>
+
+          <button
+            onClick={() => handlePageChange(page + 1)}
+            disabled={page >= totalPages || isLoading}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 font-medium transition-colors cursor-pointer"
+          >
+            <span>Trang sau</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Modal Chi tiết Giảng Viên */}
+      {selectedLecturer && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Hồ sơ giảng viên</h3>
+                  <p className="text-[11px] text-slate-400">Chi tiết thông tin giảng viên từ API</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedLecturer(null)}
+                className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="flex items-center gap-3.5 pb-3 border-b border-slate-100">
+                {renderAvatar(selectedLecturer.fullName, selectedLecturer.avatarUrl, 'lg')}
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-base">{selectedLecturer.fullName}</h4>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono">
+                      {selectedLecturer.lecturerCode}
+                    </span>
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                        selectedLecturer.isActive
+                          ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                          : 'text-slate-500 bg-slate-100 border border-slate-200'
+                      }`}
+                    >
+                      {selectedLecturer.isActive ? 'Đang công tác' : 'Tạm dừng'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50">
+                  <span className="text-slate-500 font-medium">Email:</span>
+                  <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                    <span>{selectedLecturer.email}</span>
+                    <button
+                      onClick={() => copyToClipboard(selectedLecturer.email, 'email')}
+                      className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50">
+                  <span className="text-slate-500 font-medium">Số điện thoại:</span>
+                  <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                    <span>{selectedLecturer.phone || 'Chưa cập nhật'}</span>
+                    {selectedLecturer.phone && (
+                      <button
+                        onClick={() => copyToClipboard(selectedLecturer.phone, 'số điện thoại')}
+                        className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1 p-2.5 rounded-xl bg-slate-50">
+                  <span className="text-slate-500 font-medium">Lecturer ID (GUID):</span>
+                  <div className="flex items-center justify-between font-mono text-[11px] text-slate-700 break-all">
+                    <span>{selectedLecturer.id}</span>
+                    <button
+                      onClick={() => copyToClipboard(selectedLecturer.id, 'Lecturer ID')}
+                      className="text-slate-400 hover:text-rose-600 cursor-pointer shrink-0 ml-2"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1 p-2.5 rounded-xl bg-slate-50">
+                  <span className="text-slate-500 font-medium">User ID (GUID):</span>
+                  <div className="flex items-center justify-between font-mono text-[11px] text-slate-700 break-all">
+                    <span>{selectedLecturer.userId}</span>
+                    <button
+                      onClick={() => copyToClipboard(selectedLecturer.userId, 'User ID')}
+                      className="text-slate-400 hover:text-rose-600 cursor-pointer shrink-0 ml-2"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedLecturer(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Thêm giảng viên mới */}
-      {isModalOpen && (
+      {isAddModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
@@ -450,103 +978,104 @@ export const AdminTeachersView: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-800 text-sm">Thêm giảng viên mới</h3>
-                  <p className="text-[11px] text-slate-400">Tạo tài khoản hồ sơ giảng viên toàn trường</p>
+                  <p className="text-[11px] text-slate-400">Endpoint: POST /api/lecturers</p>
                 </div>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsAddModalOpen(false)
+                  setFormError(null)
+                }}
                 className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateTeacher} className="p-5 space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+            <form onSubmit={handleCreateLecturer} className="p-5 space-y-4">
+              {formError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-xs text-rose-800 animate-in fade-in duration-150">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-bold text-rose-900">Không thể tạo giảng viên</p>
+                    <p className="text-rose-700 mt-0.5 leading-relaxed">{formError}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Mã GV</label>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Mã GV *</label>
                   <input
                     type="text"
                     required
-                    placeholder="GV007"
-                    value={newTeacher.code}
-                    onChange={e => setNewTeacher({ ...newTeacher, code: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500"
+                    placeholder="LEC001"
+                    value={newLecturer.lecturerCode}
+                    onChange={e => setNewLecturer({ ...newLecturer, lecturerCode: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500 uppercase"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Học vị / Học hàm</label>
-                  <select
-                    value={newTeacher.title}
-                    onChange={e => setNewTeacher({ ...newTeacher, title: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500 bg-white"
-                  >
-                    <option value="ThS">ThS</option>
-                    <option value="TS">TS</option>
-                    <option value="PGS.TS">PGS.TS</option>
-                    <option value="GS.TS">GS.TS</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Họ và tên</label>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Họ và tên *</label>
                   <input
                     type="text"
                     required
-                    placeholder="Nguyễn Văn A"
-                    value={newTeacher.name}
-                    onChange={e => setNewTeacher({ ...newTeacher, name: e.target.value })}
+                    placeholder="Nguyen Van C"
+                    value={newLecturer.fullName}
+                    onChange={e => setNewLecturer({ ...newLecturer, fullName: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Khoa trực thuộc</label>
-                  <select
-                    value={newTeacher.faculty}
-                    onChange={e => setNewTeacher({ ...newTeacher, faculty: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500 bg-white"
-                  >
-                    <option value="Khoa CNTT">Khoa CNTT</option>
-                    <option value="Khoa Kinh tế">Khoa Kinh tế</option>
-                    <option value="Khoa Ngoại ngữ">Khoa Ngoại ngữ</option>
-                    <option value="Khoa Luật & Chính sách">Khoa Luật & Chính sách</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Bộ môn</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Bộ môn Kỹ thuật Phần mềm"
-                    value={newTeacher.department}
-                    onChange={e => setNewTeacher({ ...newTeacher, department: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Email</label>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">Email đăng nhập *</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     required
-                    placeholder="teacher@harvard.edu.vn"
-                    value={newTeacher.email}
-                    onChange={e => setNewTeacher({ ...newTeacher, email: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500"
+                    placeholder="new.lecturer@example.com"
+                    value={newLecturer.email}
+                    onChange={e => setNewLecturer({ ...newLecturer, email: e.target.value })}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500"
                   />
                 </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Số điện thoại</label>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">Mật khẩu khởi tạo *</label>
+                <div className="relative">
+                  <Key className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Password123!"
+                    value={newLecturer.password}
+                    onChange={e => setNewLecturer({ ...newLecturer, password: e.target.value })}
+                    className="w-full pl-9 pr-9 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Mật khẩu mặc định: Password123!</p>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">Số điện thoại</label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="0912 345 678"
-                    value={newTeacher.phone}
-                    onChange={e => setNewTeacher({ ...newTeacher, phone: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500"
+                    placeholder="0900000002"
+                    value={newLecturer.phone}
+                    onChange={e => setNewLecturer({ ...newLecturer, phone: e.target.value })}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-rose-500"
                   />
                 </div>
               </div>
@@ -554,16 +1083,22 @@ export const AdminTeachersView: React.FC = () => {
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    setIsAddModalOpen(false)
+                    setFormError(null)
+                  }}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-md shadow-rose-600/20 transition-all cursor-pointer"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-md shadow-rose-600/20 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
                 >
-                  Lưu giảng viên
+                  {isSubmitting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isSubmitting ? 'Đang tạo...' : 'Lưu giảng viên'}</span>
                 </button>
               </div>
             </form>
@@ -571,7 +1106,7 @@ export const AdminTeachersView: React.FC = () => {
         </div>
       )}
 
-      {/* Toast */}
+      {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-bottom duration-300">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />

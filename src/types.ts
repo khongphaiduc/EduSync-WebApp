@@ -144,6 +144,96 @@ export interface ApiStudentListResponse {
   data?: ApiStudentListData
 }
 
+export interface ApiLecturerItem {
+  id: string
+  userId: string
+  lecturerCode: string
+  fullName: string
+  email: string
+  phone: string
+  avatarUrl: string | null
+  isActive: boolean
+}
 
+export interface ApiLecturerListData {
+  items: ApiLecturerItem[]
+  page: number
+  pageSize: number
+  totalCount: number
+}
+
+export interface ApiLecturerListResponse {
+  success: boolean
+  message: string
+  data?: ApiLecturerListData
+}
+
+export interface CreateLecturerRequest {
+  email: string
+  password?: string
+  lecturerCode: string
+  fullName: string
+  phone: string
+}
+
+export interface CreateLecturerResponse {
+  success: boolean
+  message: string
+  data?: ApiLecturerItem
+}
+
+export interface ApiCourseItem {
+  id: string
+  courseCode: string
+  courseName: string
+  credits: number
+  description: string
+}
+
+export interface ApiCourseListResponse {
+  success: boolean
+  message: string
+  data?: ApiCourseItem[]
+}
+
+export interface CreateCourseRequest {
+  courseCode: string
+  courseName: string
+  credits: number
+  description: string
+}
+
+export interface CreateCourseResponse {
+  success: boolean
+  message: string
+  data?: ApiCourseItem
+}
+
+export interface ApiSemesterItem {
+  id: string
+  name: string
+  academicYear: string
+  startDate: string
+  endDate: string
+}
+
+export interface ApiSemesterListResponse {
+  success: boolean
+  message: string
+  data?: ApiSemesterItem[]
+}
+
+export interface CreateSemesterRequest {
+  name: string
+  academicYear: string
+  startDate: string
+  endDate: string
+}
+
+export interface CreateSemesterResponse {
+  success: boolean
+  message: string
+  data?: ApiSemesterItem
+}
 
 

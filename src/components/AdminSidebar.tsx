@@ -6,7 +6,6 @@ import {
   BookOpen,
   Calendar,
   Layers,
-  UserCheck,
   CalendarDays,
   FileText,
   Bell,
@@ -35,7 +34,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     { id: 'subjects' as AdminNavTab, label: 'Môn học', icon: BookOpen },
     { id: 'semesters' as AdminNavTab, label: 'Học kỳ', icon: Calendar },
     { id: 'sections' as AdminNavTab, label: 'Lớp học phần', icon: Layers },
-    { id: 'assignment' as AdminNavTab, label: 'Phân công giảng viên', icon: UserCheck },
     { id: 'schedule' as AdminNavTab, label: 'Lịch học', icon: CalendarDays },
     { id: 'requests' as AdminNavTab, label: 'Đơn từ', icon: FileText },
     { id: 'notifications' as AdminNavTab, label: 'Thông báo', icon: Bell }

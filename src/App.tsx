@@ -27,7 +27,6 @@ import {
   AdminSubjectsView,
   AdminSemestersView,
   AdminSectionsView,
-  AdminAssignmentView,
   AdminScheduleView,
   AdminRequestsView,
   AdminNotificationsView,
@@ -253,21 +252,11 @@ export default function App() {
               {/* 6. Lớp học phần */}
               {adminTab === 'sections' && <AdminSectionsView />}
 
-              {/* 7. Phân công giảng viên */}
-              {adminTab === 'assignment' && <AdminAssignmentView />}
-
-              {/* 8. Lịch học */}
+              {/* 7. Lịch học */}
               {adminTab === 'schedule' && <AdminScheduleView />}
 
               {/* 9. Đơn từ học vụ */}
-              {adminTab === 'requests' && (
-                <AdminRequestsView
-                  requests={requests}
-                  onViewRequest={req => setSelectedRequest(req)}
-                  onApprove={handleApproveRequest}
-                  onReject={handleRejectRequest}
-                />
-              )}
+              {adminTab === 'requests' && <AdminRequestsView />}
 
               {/* 10. Thông báo */}
               {adminTab === 'notifications' && <AdminNotificationsView />}

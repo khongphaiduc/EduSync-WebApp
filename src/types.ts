@@ -68,7 +68,6 @@ export type AdminNavTab =
   | 'subjects'
   | 'semesters'
   | 'sections'
-  | 'assignment'
   | 'schedule'
   | 'requests'
   | 'notifications'
@@ -236,4 +235,177 @@ export interface CreateSemesterResponse {
   data?: ApiSemesterItem
 }
 
+export interface ApiCourseSectionItem {
+  id: string
+  courseId: string
+  courseCode?: string
+  courseName?: string
+  semesterId: string
+  semesterName?: string
+  academicYear?: string
+  lecturerId: string
+  lecturerName?: string
+  sectionCode: string
+  capacity: number
+  status: string
+}
 
+export interface ApiCourseSectionListData {
+  items: ApiCourseSectionItem[]
+  page: number
+  pageSize: number
+  totalCount: number
+}
+
+export interface ApiCourseSectionListResponse {
+  success: boolean
+  message: string
+  data?: ApiCourseSectionListData
+}
+
+export interface CreateCourseSectionRequest {
+  courseId: string
+  semesterId: string
+  lecturerId: string
+  sectionCode: string
+  capacity: number
+}
+
+export interface CreateCourseSectionResponse {
+  success: boolean
+  message: string
+  data?: ApiCourseSectionItem
+}
+
+export interface WeeklySlotRequest {
+  dayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'
+  startTime: string
+  endTime: string
+  room?: string
+}
+
+export interface GenerateSessionsRequest {
+  fromDate: string
+  toDate: string
+  timeZoneId?: string
+  weeklySlots: WeeklySlotRequest[]
+  excludeDates?: string[]
+}
+
+export interface ApiClassSessionItem {
+  id: string
+  courseSectionId: string
+  startAtUtc: string
+  endAtUtc: string
+  room: string | null
+  topic: string | null
+  status: 'Scheduled' | 'Cancelled' | 'Completed' | string
+}
+
+export interface GenerateSessionsResponse {
+  success: boolean
+  message: string
+  data?: {
+    courseSectionId: string
+    createdCount: number
+    sessions: ApiClassSessionItem[]
+  }
+  errors?: Record<string, string[]>
+}
+
+export interface ApiClassSessionListResponse {
+  success: boolean
+  message: string
+  data?: ApiClassSessionItem[]
+}
+
+export interface UpdateClassSessionRequest {
+  startAtUtc?: string
+  endAtUtc?: string
+  room?: string
+  topic?: string
+  status?: 'Scheduled' | 'Cancelled' | 'Completed' | string
+  timeZoneId?: string
+  clearRoom?: boolean
+  clearTopic?: boolean
+}
+
+export interface UpdateClassSessionResponse {
+  success: boolean
+  message: string
+  data?: ApiClassSessionItem
+}
+
+export interface ApiStudentRequestItem {
+  id: string
+  studentId: string
+  studentCode: string
+  studentName: string
+  requestType: string
+  title: string
+  content: string
+  startDate: string | null
+  endDate: string | null
+  status: 'Pending' | 'Approved' | 'Rejected' | string
+  submittedAt: string
+  reviewedBy: string | null
+  reviewedAt: string | null
+  response: string | null
+}
+
+export interface ApiStudentRequestListData {
+  items: ApiStudentRequestItem[]
+  page: number
+  pageSize: number
+  totalCount: number
+}
+
+export interface ApiStudentRequestListResponse {
+  success: boolean
+  message: string
+  data?: ApiStudentRequestListData
+}
+
+export interface ApiSectionStudentItem {
+  enrollmentId: string
+  studentId: string
+  studentCode: string
+  fullName: string
+  email: string
+  studentStatus: string
+  enrollmentStatus: string
+  enrolledAt: string
+}
+
+export interface ApiSectionStudentListData {
+  items: ApiSectionStudentItem[]
+  page: number
+  pageSize: number
+  totalCount: number
+}
+
+export interface ApiSectionStudentListResponse {
+  success: boolean
+  message: string
+  data?: ApiSectionStudentListData
+}
+
+export interface CreateGradeComponentRequest {
+  name: string
+  weight: number
+  maxScore: number
+}
+
+export interface ApiGradeComponentItem {
+  id: string
+  courseSectionId: string
+  name: string
+  weight: number
+  maxScore: number
+}
+
+export interface CreateGradeComponentResponse {
+  success: boolean
+  message: string
+  data?: ApiGradeComponentItem
+}

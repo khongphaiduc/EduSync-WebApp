@@ -7,18 +7,21 @@ interface TeacherGradesViewProps {
   classes?: ClassItem[]
   gradesData?: Record<string, StudentGrade[]>
   onSaveGrades: (classCode: string, grades: StudentGrade[]) => void
+  initialSectionId?: string
 }
 
 export const TeacherGradesView: React.FC<TeacherGradesViewProps> = ({
   classes = MY_CLASSES,
   gradesData = INITIAL_STUDENTS_GRADES,
-  onSaveGrades
+  onSaveGrades,
+  initialSectionId
 }) => {
   return (
     <GradeEntryView
       classes={classes}
       gradesData={gradesData}
       onSaveGrades={onSaveGrades}
+      initialSectionId={initialSectionId}
     />
   )
 }

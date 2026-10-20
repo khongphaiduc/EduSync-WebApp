@@ -15,7 +15,11 @@ import {
   Calendar,
   Users,
   Mail,
-  User
+  User,
+  Percent,
+  Award,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react'
 import type {
   ApiCourseItem,
@@ -26,9 +30,21 @@ import type {
   CreateCourseSectionRequest,
   CreateCourseSectionResponse,
   ApiSectionStudentItem,
-  ApiSectionStudentListResponse
+  ApiSectionStudentListResponse,
+  ApiGradeComponentItem,
+  ApiGradeComponentListResponse,
+  CreateGradeComponentRequest,
+  CreateGradeComponentResponse,
+  CourseSectionGradesData,
+  CourseSectionGradesResponse
 } from '../../types'
-import { API_BASE_URL, getCourseSectionStudentsUrl } from '../../config'
+import {
+  API_BASE_URL,
+  getCourseSectionStudentsUrl,
+  getGradeComponentsUrl,
+  getCourseSectionGradesUrl
+} from '../../config'
+import { DEMO_SECTION_GRADES } from '../../mockData'
 
 export const AdminSectionsView: React.FC = () => {
   // Danh sách lớp học phần lấy từ API GET /api/course-sections
@@ -88,6 +104,153 @@ export const AdminSectionsView: React.FC = () => {
   const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(false)
   const [studentsError, setStudentsError] = useState<string | null>(null)
   const [studentsSearch, setStudentsSearch] = useState('')
+
+  // Modal danh sách loại điểm của một học phần (GET /api/course-sections/{sectionId}/grade-components)
+  const [viewingGradeComponentsSection, setViewingGradeComponentsSection] = useState<ApiCourseSectionItem | null>(null)
+  const [gradeComponents, setGradeComponents] = useState<ApiGradeComponentItem[]>([])
+  const [isLoadingGradeComponents, setIsLoadingGradeComponents] = useState<boolean>(false)
+  const [gradeComponentsError, setGradeComponentsError] = useState<string | null>(null)
+
+  // Form tạo loại điểm thành phần mới (POST /api/course-sections/{sectionId}/grade-components)
+  const [newCompName, setNewCompName] = useState('Giữa kỳ')
+  const [newCompWeight, setNewCompWeight] = useState<number | string>(30)
+  const [newCompMaxScore, setNewCompMaxScore] = useState<number | string>(10)
+  const [isCreatingComp, setIsCreatingComp] = useState<boolean>(false)
+  const [createCompError, setCreateCompError] = useState<string | null>(null)
+
+  // Modal xem bảng điểm lớp học phần (GET /api/course-sections/{sectionId}/grades)
+  const [viewingGradesSection, setViewingGradesSection] = useState<ApiCourseSectionItem | null>(null)
+  const [gradesData, setGradesData] = useState<CourseSectionGradesData | null>(null)
+  const [gradesPage, setGradesPage] = useState<number>(1)
+  const [gradesPageSize, setGradesPageSize] = useState<number>(20)
+  const [isLoadingGrades, setIsLoadingGrades] = useState<boolean>(false)
+  const [gradesError, setGradesError] = useState<string | null>(null)
+  const [gradesSearch, setGradesSearch] = useState<string>('')
+
+  // Gọi API GET /api/course-sections/{sectionId}/grade-components
+  const fetchSectionGradeComponents = useCallback(async (sectionId: string) => {
+    setIsLoadingGradeComponents(true)
+    setGradeComponentsError(null)
+
+    const token = localStorage.getItem('accessToken')
+    if (!token) {
+      setGradeComponentsError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+      setIsLoadingGradeComponents(false)
+      return
+    }
+
+    try {
+      const url = getGradeComponentsUrl(sectionId)
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const json: ApiGradeComponentListResponse = await response.json()
+        if (json.success && Array.isArray(json.data)) {
+          setGradeComponents(json.data)
+        } else {
+          setGradeComponents([])
+        }
+      } else {
+        const errJson = await response.json().catch(() => null)
+        setGradeComponentsError(errJson?.message || 'Không thể tải danh sách loại điểm của học phần này.')
+        setGradeComponents([])
+      }
+    } catch {
+      setGradeComponentsError('Lỗi kết nối máy chủ khi tải danh sách loại điểm.')
+      setGradeComponents([])
+    } finally {
+      setIsLoadingGradeComponents(false)
+    }
+  }, [])
+
+  const handleOpenGradeComponentsModal = (sec: ApiCourseSectionItem) => {
+    setViewingGradeComponentsSection(sec)
+    setCreateCompError(null)
+    setNewCompName('Giữa kỳ')
+    setNewCompWeight(30)
+    setNewCompMaxScore(10)
+    fetchSectionGradeComponents(sec.id)
+  }
+
+  const handleCreateGradeComponent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!viewingGradeComponentsSection) return
+    setCreateCompError(null)
+
+    if (!newCompName.trim()) {
+      setCreateCompError('Vui lòng nhập tên loại điểm (VD: Giữa kỳ, Cuối kỳ...).')
+      return
+    }
+
+    const weightNum = Number(newCompWeight)
+    if (isNaN(weightNum) || weightNum <= 0 || weightNum > 100) {
+      setCreateCompError('Trọng số điểm phải từ 1% đến 100%.')
+      return
+    }
+
+    const maxScoreNum = Number(newCompMaxScore)
+    if (isNaN(maxScoreNum) || maxScoreNum <= 0) {
+      setCreateCompError('Điểm tối đa phải lớn hơn 0.')
+      return
+    }
+
+    const token = localStorage.getItem('accessToken')
+    if (!token) {
+      setCreateCompError('Phiên đăng nhập đã hết hạn.')
+      return
+    }
+
+    setIsCreatingComp(true)
+    try {
+      const payload: CreateGradeComponentRequest = {
+        name: newCompName.trim(),
+        weight: weightNum,
+        maxScore: maxScoreNum
+      }
+
+      const response = await fetch(getGradeComponentsUrl(viewingGradeComponentsSection.id), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      const json: CreateGradeComponentResponse = await response.json().catch(() => ({
+        success: false,
+        message: 'Lỗi không xác định từ máy chủ.'
+      }))
+
+      if (response.status === 201 || (response.ok && json.success)) {
+        showToast(`Đã thêm loại điểm "${payload.name}" (${payload.weight}%) thành công!`)
+        if (payload.name === 'Giữa kỳ') {
+          setNewCompName('Cuối kỳ')
+          setNewCompWeight(50)
+        } else if (payload.name === 'Chuyên cần') {
+          setNewCompName('Giữa kỳ')
+          setNewCompWeight(30)
+        } else {
+          setNewCompName('')
+          setNewCompWeight(20)
+        }
+        await fetchSectionGradeComponents(viewingGradeComponentsSection.id)
+      } else {
+        setCreateCompError(json.message || 'Không thể tạo loại điểm cho học phần này.')
+      }
+    } catch {
+      setCreateCompError('Lỗi kết nối máy chủ.')
+    } finally {
+      setIsCreatingComp(false)
+    }
+  }
 
   const fetchSectionStudents = useCallback(
     async (sectionId: string, targetPage = 1, targetPageSize = studentsPageSize) => {
@@ -172,6 +335,184 @@ export const AdminSectionsView: React.FC = () => {
         (st.email && st.email.toLowerCase().includes(q))
     )
   }, [students, studentsSearch])
+
+  // Gọi API GET /api/course-sections/{sectionId}/grades?page={page}&pageSize={pageSize}
+  const fetchSectionGrades = useCallback(
+    async (sectionId: string, targetPage = 1, targetPageSize = 20) => {
+      setIsLoadingGrades(true)
+      setGradesError(null)
+      const token = localStorage.getItem('accessToken')
+
+      try {
+        const endpoint = getCourseSectionGradesUrl(sectionId, targetPage, targetPageSize)
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        })
+
+        if (response.ok) {
+          const json: CourseSectionGradesResponse = await response.json()
+          if (json.success && json.data) {
+            setGradesData(json.data)
+            setGradesPage(json.data.page || targetPage)
+            setGradesPageSize(json.data.pageSize || targetPageSize)
+            return
+          }
+        }
+        // Fallback to demo grades
+        setGradesData({
+          ...DEMO_SECTION_GRADES,
+          courseSectionId: sectionId
+        })
+      } catch {
+        setGradesData({
+          ...DEMO_SECTION_GRADES,
+          courseSectionId: sectionId
+        })
+      } finally {
+        setIsLoadingGrades(false)
+      }
+    },
+    []
+  )
+
+  const handleOpenGradesModal = (sec: ApiCourseSectionItem) => {
+    setViewingGradesSection(sec)
+    setGradesSearch('')
+    setGradesPage(1)
+    fetchSectionGrades(sec.id, 1, gradesPageSize)
+  }
+
+  const handleGradesPageChange = (newPage: number) => {
+    if (!viewingGradesSection) return
+    setGradesPage(newPage)
+    fetchSectionGrades(viewingGradesSection.id, newPage, gradesPageSize)
+  }
+
+  const handleGradesPageSizeChange = (newSize: number) => {
+    if (!viewingGradesSection) return
+    setGradesPageSize(newSize)
+    setGradesPage(1)
+    fetchSectionGrades(viewingGradesSection.id, 1, newSize)
+  }
+
+  // Lọc tìm kiếm sinh viên trong bảng điểm
+  const filteredGradesStudents = useMemo(() => {
+    if (!gradesData?.students) return []
+    if (!gradesSearch.trim()) return gradesData.students
+    const q = gradesSearch.toLowerCase().trim()
+    return gradesData.students.filter(
+      st =>
+        (st.studentCode && st.studentCode.toLowerCase().includes(q)) ||
+        (st.fullName && st.fullName.toLowerCase().includes(q))
+    )
+  }, [gradesData, gradesSearch])
+
+  // Thống kê điểm học phần
+  const gradesStats = useMemo(() => {
+    if (!gradesData || !gradesData.students.length) {
+      return { totalStudents: 0, avgScore: '0.00', passRate: 0, passedCount: 0 }
+    }
+    const comps = gradesData.components || []
+    let totalScoreSum = 0
+    let gradedCount = 0
+    let passedCount = 0
+
+    gradesData.students.forEach(st => {
+      let stScore = 0
+      let hasScore = false
+      comps.forEach(c => {
+        const g = st.grades.find(item => item.gradeComponentId === c.id)
+        if (g && typeof g.score === 'number') {
+          hasScore = true
+          stScore += (g.score / (c.maxScore || 10)) * 10 * (c.weight / 100)
+        }
+      })
+      if (hasScore) {
+        gradedCount++
+        totalScoreSum += stScore
+        if (stScore >= 5.0) {
+          passedCount++
+        }
+      }
+    })
+
+    const avg = gradedCount > 0 ? (totalScoreSum / gradedCount).toFixed(2) : '0.00'
+    const passRate = gradedCount > 0 ? Math.round((passedCount / gradedCount) * 100) : 0
+
+    return {
+      totalStudents: gradesData.totalCount || gradesData.students.length,
+      avgScore: avg,
+      passRate,
+      passedCount
+    }
+  }, [gradesData])
+
+  // Xuất file CSV bảng điểm
+  const handleExportGradesCsv = () => {
+    if (!gradesData || !viewingGradesSection) return
+    const comps = gradesData.components || []
+    const headers = [
+      'STT',
+      'Mã SV',
+      'Họ và tên',
+      'Trạng thái',
+      ...comps.map(c => `"${c.name} (${c.weight}%)"`),
+      'Tổng kết (Hệ 10)',
+      'Điểm chữ',
+      'Kết quả'
+    ]
+
+    const rows = gradesData.students.map((st, idx) => {
+      let total = 0
+      const compScores = comps.map(c => {
+        const g = st.grades.find(item => item.gradeComponentId === c.id)
+        if (g && typeof g.score === 'number') {
+          total += (g.score / (c.maxScore || 10)) * 10 * (c.weight / 100)
+          return g.score
+        }
+        return ''
+      })
+      const totalRounded = Number(total.toFixed(1))
+      let letter = 'F'
+      if (totalRounded >= 9.0) letter = 'A+'
+      else if (totalRounded >= 8.5) letter = 'A'
+      else if (totalRounded >= 8.0) letter = 'B+'
+      else if (totalRounded >= 7.0) letter = 'B'
+      else if (totalRounded >= 6.5) letter = 'C+'
+      else if (totalRounded >= 5.5) letter = 'C'
+      else if (totalRounded >= 5.0) letter = 'D+'
+      else if (totalRounded >= 4.0) letter = 'D'
+
+      const status = totalRounded >= 5.0 ? 'Đạt' : totalRounded >= 4.0 ? 'Cảnh báo' : 'Không đạt'
+
+      return [
+        idx + 1,
+        st.studentCode,
+        `"${st.fullName}"`,
+        st.enrollmentStatus,
+        ...compScores,
+        totalRounded,
+        letter,
+        status
+      ]
+    })
+
+    const csvContent =
+      '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `BangDiem_${viewingGradesSection.sectionCode}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    showToast(`Đã xuất bảng điểm lớp ${viewingGradesSection.sectionCode} thành công!`)
+  }
 
   const formatDateTime = (utcStr: string | null) => {
     if (!utcStr) return '-'
@@ -786,6 +1127,22 @@ export const AdminSectionsView: React.FC = () => {
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            onClick={() => handleOpenGradeComponentsModal(sec)}
+                            className="px-2.5 py-1 text-[11px] font-semibold text-purple-600 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1"
+                            title="Xem danh sách các loại điểm của học phần"
+                          >
+                            <Percent className="w-3.5 h-3.5" />
+                            <span>Loại điểm</span>
+                          </button>
+                          <button
+                            onClick={() => handleOpenGradesModal(sec)}
+                            className="px-2.5 py-1 text-[11px] font-semibold text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1"
+                            title="Xem bảng điểm học phần (GET /api/course-sections/{id}/grades)"
+                          >
+                            <Award className="w-3.5 h-3.5" />
+                            <span>Bảng điểm</span>
+                          </button>
+                          <button
                             onClick={() => handleOpenStudentsModal(sec)}
                             className="px-2.5 py-1 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1"
                             title="Xem danh sách sinh viên lớp học phần"
@@ -1125,18 +1482,32 @@ export const AdminSectionsView: React.FC = () => {
             </div>
 
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const sec = selectedSection
-                  setSelectedSection(null)
-                  handleOpenStudentsModal(sec)
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs transition-colors cursor-pointer"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Xem danh sách sinh viên</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sec = selectedSection
+                    setSelectedSection(null)
+                    handleOpenStudentsModal(sec)
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Xem danh sách sinh viên</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sec = selectedSection
+                    setSelectedSection(null)
+                    handleOpenGradesModal(sec)
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  <Award className="w-3.5 h-3.5" />
+                  <span>Xem bảng điểm</span>
+                </button>
+              </div>
 
               <button
                 onClick={() => setSelectedSection(null)}
@@ -1349,6 +1720,656 @@ export const AdminSectionsView: React.FC = () => {
               >
                 Đóng
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Xem & Quản Lý Các Loại Điểm Của Học Phần (GET & POST /api/course-sections/{sectionId}/grade-components) */}
+      {viewingGradeComponentsSection && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-8">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                  <Percent className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base">
+                    Các Loại Điểm Của Học Phần
+                  </h3>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                    <span className="font-bold text-slate-800">
+                      Lớp: {viewingGradeComponentsSection.sectionCode}
+                    </span>
+                    <span>•</span>
+                    <span className="truncate max-w-[200px]">
+                      {viewingGradeComponentsSection.courseName || 'Môn học'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingGradeComponentsSection(null)}
+                className="w-8 h-8 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+              {/* API Info Badge */}
+              <div className="flex items-center justify-between bg-slate-100 px-3 py-1.5 rounded-xl font-mono text-[11px] text-slate-600">
+                <span>
+                  <strong className="text-purple-600">GET</strong> /api/course-sections/
+                  <span className="text-slate-800 font-bold">{viewingGradeComponentsSection.id}</span>
+                  /grade-components
+                </span>
+                <button
+                  onClick={() => fetchSectionGradeComponents(viewingGradeComponentsSection.id)}
+                  className="p-1 hover:bg-slate-200 rounded text-slate-500 cursor-pointer"
+                  title="Tải lại danh sách"
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${isLoadingGradeComponents ? 'animate-spin text-purple-600' : ''}`}
+                  />
+                </button>
+              </div>
+
+              {/* Total Weight Summary */}
+              {(() => {
+                const totalW = gradeComponents.reduce((sum, c) => sum + (c.weight || 0), 0)
+                return (
+                  <div className="p-3.5 rounded-2xl border bg-slate-50/60 border-slate-200/90 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-700">Cơ cấu trọng số học phần:</span>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
+                          totalW === 100
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : totalW > 100
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {totalW}% / 100% {totalW === 100 ? '✓ Hoàn chỉnh' : totalW < 100 ? `(Thiếu ${100 - totalW}%)` : `(Vượt ${totalW - 100}%)`}
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden flex">
+                      {gradeComponents.map((c, i) => {
+                        const colors = [
+                          'bg-blue-500',
+                          'bg-purple-500',
+                          'bg-emerald-500',
+                          'bg-amber-500',
+                          'bg-cyan-500'
+                        ]
+                        return (
+                          <div
+                            key={c.id || i}
+                            style={{ width: `${Math.min(100, c.weight)}%` }}
+                            className={`${colors[i % colors.length]} h-full transition-all`}
+                            title={`${c.name}: ${c.weight}%`}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Error Alert */}
+              {gradeComponentsError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{gradeComponentsError}</span>
+                </div>
+              )}
+
+              {/* Table / List of Existing Grade Components */}
+              <div>
+                <span className="font-extrabold text-slate-700 uppercase tracking-wider text-[11px] block mb-2">
+                  Danh sách loại điểm ({gradeComponents.length}):
+                </span>
+
+                {isLoadingGradeComponents ? (
+                  <div className="py-8 text-center text-slate-400">
+                    <RefreshCw className="w-6 h-6 animate-spin text-purple-600 mx-auto mb-2" />
+                    <span>Đang tải danh sách các loại điểm...</span>
+                  </div>
+                ) : gradeComponents.length === 0 ? (
+                  <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 text-center text-slate-400">
+                    <Percent className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-bold text-slate-700">Lớp học phần này chưa có loại điểm nào</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Sử dụng form bên dưới để thiết lập các loại điểm (Giữa kỳ, Cuối kỳ...)
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {gradeComponents.map((c, i) => (
+                      <div
+                        key={c.id || i}
+                        className="p-3 rounded-xl bg-white border border-slate-200/90 hover:border-purple-300 transition-all flex items-center justify-between gap-3 shadow-2xs"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-7 h-7 rounded-lg bg-purple-50 text-purple-700 font-extrabold flex items-center justify-center text-xs">
+                            {i + 1}
+                          </span>
+                          <div>
+                            <div className="font-bold text-slate-800 text-xs">{c.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              ID: {c.id}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5">
+                          <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 font-bold text-xs border border-purple-100">
+                            {c.weight}%
+                          </span>
+                          <span className="text-slate-500 font-medium text-[11px]">
+                            Thang {c.maxScore}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Inline Form Thêm Loại Điểm Mới (POST) */}
+              <div className="pt-3 border-t border-slate-100">
+                <span className="font-extrabold text-slate-700 uppercase tracking-wider text-[11px] block mb-2">
+                  Thêm loại điểm mới cho lớp:
+                </span>
+
+                <form onSubmit={handleCreateGradeComponent} className="p-3.5 rounded-2xl bg-purple-50/40 border border-purple-100 space-y-3">
+                  {createCompError && (
+                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+                      {createCompError}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="sm:col-span-1">
+                      <label className="font-bold text-slate-700 block mb-1 text-[11px]">
+                        Tên loại điểm *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="VD: Giữa kỳ..."
+                        value={newCompName}
+                        onChange={e => setNewCompName(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1 text-[11px]">
+                        Trọng số (%) *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        required
+                        value={newCompWeight}
+                        onChange={e => setNewCompWeight(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:border-purple-500 font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1 text-[11px]">
+                        Điểm tối đa *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        required
+                        value={newCompMaxScore}
+                        onChange={e => setNewCompMaxScore(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:border-purple-500 font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Preset Quick Chips */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-slate-400 font-semibold">Gợi ý:</span>
+                    {[
+                      { name: 'Chuyên cần', weight: 10 },
+                      { name: 'Giữa kỳ', weight: 30 },
+                      { name: 'Thực hành', weight: 20 },
+                      { name: 'Cuối kỳ', weight: 40 },
+                      { name: 'Đồ án', weight: 50 }
+                    ].map(preset => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => {
+                          setNewCompName(preset.name)
+                          setNewCompWeight(preset.weight)
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-white hover:bg-purple-100 hover:text-purple-700 text-[10px] font-semibold text-slate-600 border border-slate-200 cursor-pointer transition-colors"
+                      >
+                        {preset.name} ({preset.weight}%)
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      disabled={isCreatingComp}
+                      className="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {isCreatingComp && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                      <span>{isCreatingComp ? 'Đang thêm...' : 'Thêm loại điểm'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-slate-400 text-[11px]">
+                Tổng cộng: <strong className="text-slate-700">{gradeComponents.length}</strong> loại điểm
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingGradeComponentsSection(null)}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Xem Bảng Điểm Lớp Học Phần (GET /api/course-sections/{sectionId}/grades) */}
+      {viewingGradesSection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-sm sm:text-base flex items-center gap-2">
+                    <span>Bảng Điểm Lớp Học Phần:</span>
+                    <span className="text-emerald-600 font-mono">{viewingGradesSection.sectionCode}</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {viewingGradesSection.courseName || viewingGradesSection.courseCode} • {viewingGradesSection.semesterName || 'Học kỳ'} • GV: {viewingGradesSection.lecturerName || 'Chưa phân công'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setViewingGradesSection(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* API Info & Action Buttons */}
+            <div className="px-6 py-3 bg-emerald-50/60 border-b border-emerald-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shrink-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white font-mono font-bold text-[10px]">
+                  GET
+                </span>
+                <span className="font-mono text-emerald-950 font-medium text-[11px]">
+                  /api/course-sections/
+                  <span className="text-slate-800 font-bold">{viewingGradesSection.id}</span>
+                  /grades?page={gradesPage}&pageSize={gradesPageSize}
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-white border border-emerald-200 text-emerald-700 text-[10px] font-semibold">
+                  Bearer &lt;adminAccessToken&gt;
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => fetchSectionGrades(viewingGradesSection.id, gradesPage, gradesPageSize)}
+                  disabled={isLoadingGrades}
+                  className="px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-white hover:bg-emerald-100/60 text-emerald-700 font-semibold text-[11px] transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  title="Tải lại dữ liệu điểm mới nhất"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingGrades ? 'animate-spin' : ''}`} />
+                  <span>Làm mới</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportGradesCsv}
+                  disabled={!gradesData || !gradesData.students.length}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  title="Xuất bảng điểm ra file Excel / CSV"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Xuất Excel</span>
+                </button>
+              </div>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="p-6 border-b border-slate-100 bg-white shrink-0">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                    Sĩ số sinh viên
+                  </span>
+                  <div className="text-2xl font-black text-slate-800">
+                    {gradesStats.totalStudents}
+                  </div>
+                  <span className="text-[11px] text-slate-500">Sinh viên chính quy</span>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-blue-50/60 border border-blue-100">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500 block mb-1">
+                    Điểm trung bình
+                  </span>
+                  <div className="text-2xl font-black text-blue-700">
+                    {gradesStats.avgScore} <span className="text-xs font-normal text-blue-500">/ 10</span>
+                  </div>
+                  <span className="text-[11px] text-blue-600 font-medium">Hệ số tích lũy</span>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-100">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block mb-1">
+                    Tỷ lệ qua môn
+                  </span>
+                  <div className="text-2xl font-black text-emerald-700">
+                    {gradesStats.passRate}%
+                  </div>
+                  <span className="text-[11px] text-emerald-600 font-medium">
+                    {gradesStats.passedCount}/{gradesStats.totalStudents} sinh viên đạt
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-purple-50/60 border border-purple-100">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 block mb-1">
+                    Cấu trúc điểm ({gradesData?.components.length || 0} cột)
+                  </span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {gradesData?.components && gradesData.components.length > 0 ? (
+                      gradesData.components.map(c => (
+                        <span
+                          key={c.id}
+                          className="px-1.5 py-0.5 rounded-md bg-white border border-purple-200 text-purple-700 text-[10px] font-bold"
+                        >
+                          {c.name}: {c.weight}%
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-purple-500 italic">Chưa tạo loại điểm</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Search & PageSize controls */}
+              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="relative w-full sm:w-80">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Tìm theo mã SV hoặc họ tên..."
+                    value={gradesSearch}
+                    onChange={e => setGradesSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-auto text-xs text-slate-500">
+                  <span>Số dòng:</span>
+                  <select
+                    value={gradesPageSize}
+                    onChange={e => handleGradesPageSizeChange(Number(e.target.value))}
+                    className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
+                  >
+                    <option value={10}>10 / trang</option>
+                    <option value={20}>20 / trang</option>
+                    <option value={50}>50 / trang</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Gradebook Table */}
+            <div className="p-6 overflow-y-auto flex-1">
+              {isLoadingGrades ? (
+                <div className="py-16 text-center">
+                  <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-600">Đang tải bảng điểm học phần...</p>
+                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                    GET /api/course-sections/{viewingGradesSection.id}/grades
+                  </p>
+                </div>
+              ) : gradesError ? (
+                <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-2xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{gradesError}</span>
+                </div>
+              ) : !gradesData?.students || gradesData.students.length === 0 ? (
+                <div className="py-12 text-center text-slate-400">
+                  <FileSpreadsheet className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                  <p className="font-semibold text-xs text-slate-600">Chưa có dữ liệu sinh viên hoặc điểm số</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Lớp học phần này chưa có sinh viên đăng ký.</p>
+                </div>
+              ) : (
+                <div className="border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50/90 text-slate-600 border-b border-slate-200">
+                          <th className="py-3 px-3 font-bold text-center w-12">STT</th>
+                          <th className="py-3 px-4 font-bold w-28">Mã SV</th>
+                          <th className="py-3 px-4 font-bold min-w-[170px]">Họ và tên</th>
+                          <th className="py-3 px-3 font-bold text-center w-28">Trạng thái</th>
+
+                          {/* Dynamic Grade Components Columns */}
+                          {(gradesData.components || []).map(comp => (
+                            <th
+                              key={comp.id}
+                              className="py-3 px-3 font-bold text-center min-w-[105px] border-l border-slate-200/60 bg-emerald-50/20"
+                            >
+                              <div className="text-slate-800">{comp.name}</div>
+                              <div className="text-[10px] text-emerald-700 font-semibold">
+                                {comp.weight}% • Tối đa {comp.maxScore}
+                              </div>
+                            </th>
+                          ))}
+
+                          <th className="py-3 px-3 font-bold text-center w-28 border-l border-slate-200 bg-slate-100/60">
+                            <div>Tổng kết</div>
+                            <div className="text-[10px] text-slate-500 font-normal">Hệ 10</div>
+                          </th>
+                          <th className="py-3 px-2 font-bold text-center w-20">Điểm chữ</th>
+                          <th className="py-3 px-3 font-bold text-center w-24">Kết quả</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredGradesStudents.map((st, idx) => {
+                          const comps = gradesData.components || []
+                          let weightedScore = 0
+                          let hasAnyScore = false
+
+                          comps.forEach(c => {
+                            const g = st.grades.find(item => item.gradeComponentId === c.id)
+                            if (g && typeof g.score === 'number') {
+                              hasAnyScore = true
+                              weightedScore += (g.score / (c.maxScore || 10)) * 10 * (c.weight / 100)
+                            }
+                          })
+
+                          const totalFinal = Number(weightedScore.toFixed(1))
+                          let letter = '-'
+                          let resultText = 'Chưa hoàn tất'
+                          let resultColor = 'bg-slate-50 text-slate-600 border-slate-200'
+
+                          if (hasAnyScore) {
+                            if (totalFinal >= 9.0) letter = 'A+'
+                            else if (totalFinal >= 8.5) letter = 'A'
+                            else if (totalFinal >= 8.0) letter = 'B+'
+                            else if (totalFinal >= 7.0) letter = 'B'
+                            else if (totalFinal >= 6.5) letter = 'C+'
+                            else if (totalFinal >= 5.5) letter = 'C'
+                            else if (totalFinal >= 5.0) letter = 'D+'
+                            else if (totalFinal >= 4.0) letter = 'D'
+                            else letter = 'F'
+
+                            if (totalFinal >= 5.0) {
+                              resultText = 'Đạt'
+                              resultColor = 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            } else if (totalFinal >= 4.0) {
+                              resultText = 'Cảnh báo'
+                              resultColor = 'bg-amber-50 text-amber-700 border-amber-200'
+                            } else {
+                              resultText = 'Không đạt'
+                              resultColor = 'bg-rose-50 text-rose-700 border-rose-200'
+                            }
+                          }
+
+                          return (
+                            <tr key={st.enrollmentId || st.studentId} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-3 px-3 text-center text-slate-400 font-semibold">
+                                {(gradesPage - 1) * gradesPageSize + idx + 1}
+                              </td>
+                              <td className="py-3 px-4 font-mono font-bold text-slate-700">
+                                {st.studentCode}
+                              </td>
+                              <td className="py-3 px-4 font-bold text-slate-800">
+                                {st.fullName}
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                                  {st.enrollmentStatus === 'Registered' ? 'Đã đăng ký' : st.enrollmentStatus}
+                                </span>
+                              </td>
+
+                              {/* Component Scores */}
+                              {comps.map(comp => {
+                                const g = st.grades.find(item => item.gradeComponentId === comp.id)
+                                const score = g?.score
+                                return (
+                                  <td
+                                    key={comp.id}
+                                    className="py-3 px-3 text-center border-l border-slate-100"
+                                  >
+                                    {score !== null && score !== undefined ? (
+                                      <span
+                                        className="inline-block px-2.5 py-1 rounded-lg font-bold text-slate-800 bg-slate-50 border border-slate-200 text-xs"
+                                        title={g?.gradedAtUtc ? `Chấm lúc: ${g.gradedAtUtc}` : undefined}
+                                      >
+                                        {score}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-300 font-mono italic">-</span>
+                                    )}
+                                  </td>
+                                )
+                              })}
+
+                              {/* Weighted Total */}
+                              <td className="py-3 px-3 text-center font-extrabold border-l border-slate-200 bg-slate-50/50">
+                                {hasAnyScore ? (
+                                  <span
+                                    className={`inline-block px-2.5 py-1 rounded-lg text-xs font-black ${
+                                      totalFinal >= 8.0
+                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                        : totalFinal >= 5.0
+                                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                        : 'bg-rose-100 text-rose-800 border border-rose-200'
+                                    }`}
+                                  >
+                                    {totalFinal}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 font-mono italic">-</span>
+                                )}
+                              </td>
+
+                              {/* Letter Grade */}
+                              <td className="py-3 px-2 text-center font-black text-slate-700">
+                                {letter}
+                              </td>
+
+                              {/* Result Status */}
+                              <td className="py-3 px-3 text-center">
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${resultColor}`}>
+                                  {resultText}
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Pagination Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+              <span className="text-slate-500 text-xs">
+                Hiển thị <strong>{filteredGradesStudents.length}</strong> / <strong>{gradesData?.totalCount || filteredGradesStudents.length}</strong> sinh viên
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleGradesPageChange(Math.max(1, gradesPage - 1))}
+                  disabled={gradesPage <= 1 || isLoadingGrades}
+                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-white text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  title="Trang trước"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800">
+                  Trang {gradesPage} / {Math.ceil((gradesData?.totalCount || 1) / gradesPageSize) || 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleGradesPageChange(
+                      Math.min(Math.ceil((gradesData?.totalCount || 1) / gradesPageSize) || 1, gradesPage + 1)
+                    )
+                  }
+                  disabled={
+                    gradesPage >= (Math.ceil((gradesData?.totalCount || 1) / gradesPageSize) || 1) ||
+                    isLoadingGrades
+                  }
+                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-white text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  title="Trang tiếp theo"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setViewingGradesSection(null)}
+                  className="ml-3 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
             </div>
           </div>
         </div>

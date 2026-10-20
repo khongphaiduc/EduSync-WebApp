@@ -5,7 +5,10 @@ import type {
   StudentGrade,
   FacultyStat,
   SectionClassItem,
-  ActivityEvent
+  ActivityEvent,
+  LecturerScheduleItem,
+  SessionAttendanceItem,
+  CourseSectionGradesData
 } from './types'
 
 export const TODAY_SCHEDULE: ScheduleItem[] = [
@@ -481,4 +484,322 @@ export const ADMIN_RECENT_REQUESTS = [
     status: 'Chờ duyệt'
   }
 ]
+
+export const DEMO_LECTURER_SCHEDULE: LecturerScheduleItem[] = [
+  // Session from user payload:
+  {
+    id: '11111111-1111-1111-1111-111111111111',
+    courseSectionId: '22222222-2222-2222-2222-222222222222',
+    sectionCode: 'CS101-01',
+    courseId: '33333333-3333-3333-3333-333333333333',
+    courseCode: 'CS101',
+    courseName: 'Introduction to Programming',
+    semesterId: '44444444-4444-4444-4444-444444444444',
+    semesterName: 'Semester 1',
+    startAtUtc: '2026-09-07T00:30:00Z',
+    endAtUtc: '2026-09-07T03:00:00Z',
+    room: 'A101',
+    topic: 'Programming basics',
+    status: 'Scheduled'
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111112',
+    courseSectionId: '22222222-2222-2222-2222-222222222222',
+    sectionCode: 'CS101-01',
+    courseId: '33333333-3333-3333-3333-333333333333',
+    courseCode: 'CS101',
+    courseName: 'Introduction to Programming',
+    semesterId: '44444444-4444-4444-4444-444444444444',
+    semesterName: 'Semester 1',
+    startAtUtc: '2026-09-09T06:00:00Z',
+    endAtUtc: '2026-09-09T08:30:00Z',
+    room: 'Lab B204',
+    topic: 'Variables and Control Structures Lab',
+    status: 'Scheduled'
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111113',
+    courseSectionId: '22222222-2222-2222-2222-222222222223',
+    sectionCode: 'SE214-02',
+    courseId: '33333333-3333-3333-3333-333333333334',
+    courseCode: 'SE214',
+    courseName: 'Advanced Web Development',
+    semesterId: '44444444-4444-4444-4444-444444444444',
+    semesterName: 'Semester 1',
+    startAtUtc: '2026-09-11T01:00:00Z',
+    endAtUtc: '2026-09-11T03:30:00Z',
+    room: 'A402',
+    topic: 'React Hooks and State Management',
+    status: 'Scheduled'
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111120',
+    courseSectionId: '22222222-2222-2222-2222-222222222222',
+    sectionCode: 'CS101-01',
+    courseId: '33333333-3333-3333-3333-333333333333',
+    courseCode: 'CS101',
+    courseName: 'Introduction to Programming',
+    semesterId: '44444444-4444-4444-4444-444444444444',
+    semesterName: 'Semester 1',
+    startAtUtc: '2026-10-19T00:30:00Z',
+    endAtUtc: '2026-10-19T03:00:00Z',
+    room: 'A101',
+    topic: 'Arrays and Pointers in C/C++',
+    status: 'Completed'
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111121',
+    courseSectionId: '22222222-2222-2222-2222-222222222223',
+    sectionCode: 'SE214-02',
+    courseId: '33333333-3333-3333-3333-333333333334',
+    courseCode: 'SE214',
+    courseName: 'Advanced Web Development',
+    semesterId: '44444444-4444-4444-4444-444444444444',
+    semesterName: 'Semester 1',
+    startAtUtc: '2026-10-20T01:00:00Z',
+    endAtUtc: '2026-10-20T03:30:00Z',
+    room: 'A402',
+    topic: 'RESTful API integration and JWT Authentication',
+    status: 'Scheduled'
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111122',
+    courseSectionId: '22222222-2222-2222-2222-222222222224',
+    sectionCode: 'DB201-01',
+    courseId: '33333333-3333-3333-3333-333333333335',
+    courseCode: 'DB201',
+    courseName: 'Database Management Systems',
+    semesterId: '44444444-4444-4444-4444-444444444444',
+    semesterName: 'Semester 1',
+    startAtUtc: '2026-10-20T06:00:00Z',
+    endAtUtc: '2026-10-20T08:30:00Z',
+    room: 'Lab B301',
+    topic: 'SQL Joins, Aggregation and Subqueries',
+    status: 'Scheduled'
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111123',
+    courseSectionId: '22222222-2222-2222-2222-222222222222',
+    sectionCode: 'CS101-01',
+    courseId: '33333333-3333-3333-3333-333333333333',
+    courseCode: 'CS101',
+    courseName: 'Introduction to Programming',
+    semesterId: '44444444-4444-4444-4444-444444444444',
+    semesterName: 'Semester 1',
+    startAtUtc: '2026-10-22T00:30:00Z',
+    endAtUtc: '2026-10-22T03:00:00Z',
+    room: 'Lab A201',
+    topic: 'Object Oriented Programming in C++',
+    status: 'Scheduled'
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111124',
+    courseSectionId: '22222222-2222-2222-2222-222222222225',
+    sectionCode: 'IT302-01',
+    courseId: '33333333-3333-3333-3333-333333333336',
+    courseCode: 'IT302',
+    courseName: 'Software Engineering Project',
+    semesterId: '44444444-4444-4444-4444-444444444444',
+    semesterName: 'Semester 1',
+    startAtUtc: '2026-10-23T06:30:00Z',
+    endAtUtc: '2026-10-23T09:00:00Z',
+    room: 'C302',
+    topic: 'Sprint 2 Review & Architecture Assessment',
+    status: 'Scheduled'
+  }
+]
+
+export const DEMO_SESSION_ATTENDANCE: SessionAttendanceItem[] = [
+  // User payload items:
+  {
+    enrollmentId: '33333333-3333-3333-3333-333333333333',
+    studentId: '44444444-4444-4444-4444-444444444444',
+    studentCode: 'STU001',
+    fullName: 'Nguyen Van A',
+    email: 'nguyen.vana@edusync.edu.vn',
+    enrollmentStatus: 'Registered',
+    attendanceStatus: 'Present',
+    status: 'Present',
+    note: null,
+    recordedAtUtc: '2026-09-07T00:35:00Z'
+  },
+  {
+    enrollmentId: '55555555-5555-5555-5555-555555555555',
+    studentId: '66666666-6666-6666-6666-666666666666',
+    studentCode: 'STU002',
+    fullName: 'Tran Thi B',
+    email: 'tran.thib@edusync.edu.vn',
+    enrollmentStatus: 'Registered',
+    attendanceStatus: null,
+    status: null,
+    note: null,
+    recordedAtUtc: null
+  },
+  {
+    enrollmentId: '77777777-7777-7777-7777-777777777777',
+    studentId: '88888888-8888-8888-8888-888888888888',
+    studentCode: 'STU003',
+    fullName: 'Le Quang Huy',
+    email: 'le.quanghuy@edusync.edu.vn',
+    enrollmentStatus: 'Registered',
+    attendanceStatus: 'Absent',
+    status: 'Absent',
+    note: 'Báo nghỉ',
+    recordedAtUtc: '2026-09-07T00:38:00Z'
+  },
+  {
+    enrollmentId: '99999999-9999-9999-9999-999999999999',
+    studentId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    studentCode: 'STU004',
+    fullName: 'Pham Minh Anh',
+    email: 'pham.minhanh@edusync.edu.vn',
+    enrollmentStatus: 'Registered',
+    attendanceStatus: 'Late',
+    status: 'Late',
+    note: 'Đến muộn 15 phút',
+    recordedAtUtc: '2026-09-07T00:45:00Z'
+  },
+  {
+    enrollmentId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    studentId: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    studentCode: 'STU005',
+    fullName: 'Hoang Quoc Bao',
+    email: 'hoang.quocbao@edusync.edu.vn',
+    enrollmentStatus: 'Registered',
+    attendanceStatus: 'Excused',
+    status: 'Excused',
+    note: 'Lý do sức khỏe',
+    recordedAtUtc: '2026-09-07T00:36:00Z'
+  },
+  {
+    enrollmentId: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+    studentId: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+    studentCode: 'STU006',
+    fullName: 'Do Thuy Dung',
+    email: 'do.thuydung@edusync.edu.vn',
+    enrollmentStatus: 'Registered',
+    attendanceStatus: null,
+    status: null,
+    note: null,
+    recordedAtUtc: null
+  },
+  {
+    enrollmentId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+    studentId: '12121212-1212-1212-1212-121212121212',
+    studentCode: 'STU007',
+    fullName: 'Vu Duc Thinh',
+    email: 'vu.ducthinh@edusync.edu.vn',
+    enrollmentStatus: 'Registered',
+    attendanceStatus: null,
+    status: null,
+    note: null,
+    recordedAtUtc: null
+  },
+  {
+    enrollmentId: '23232323-2323-2323-2323-232323232323',
+    studentId: '34343434-3434-3434-3434-343434343434',
+    studentCode: 'STU008',
+    fullName: 'Bui Thi Lan',
+    email: 'bui.thilan@edusync.edu.vn',
+    enrollmentStatus: 'Registered',
+    attendanceStatus: 'Present',
+    status: 'Present',
+    note: null,
+    recordedAtUtc: '2026-09-07T00:35:00Z'
+  }
+]
+
+export const DEMO_SECTION_GRADES: CourseSectionGradesData = {
+  courseSectionId: '22222222-2222-2222-2222-222222222222',
+  components: [
+    {
+      id: '11111111-1111-1111-1111-111111111111',
+      courseSectionId: '22222222-2222-2222-2222-222222222222',
+      name: 'Giữa kỳ',
+      weight: 30,
+      maxScore: 10
+    },
+    {
+      id: '33333333-3333-3333-3333-333333333333',
+      courseSectionId: '22222222-2222-2222-2222-222222222222',
+      name: 'Cuối kỳ',
+      weight: 70,
+      maxScore: 10
+    }
+  ],
+  students: [
+    {
+      enrollmentId: '44444444-4444-4444-4444-444444444444',
+      studentId: '55555555-5555-5555-5555-555555555555',
+      studentCode: 'STU001',
+      fullName: 'Nguyen Van A',
+      enrollmentStatus: 'Registered',
+      grades: [
+        {
+          gradeComponentId: '11111111-1111-1111-1111-111111111111',
+          gradeId: '66666666-6666-6666-6666-666666666666',
+          score: 8.5,
+          gradedAtUtc: '2026-10-20T03:00:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '33333333-3333-3333-3333-333333333333',
+          gradeId: null,
+          score: null,
+          gradedAtUtc: null,
+          updatedAtUtc: null
+        }
+      ]
+    },
+    {
+      enrollmentId: '55555555-5555-5555-5555-555555555555',
+      studentId: '66666666-6666-6666-6666-666666666666',
+      studentCode: 'STU002',
+      fullName: 'Tran Thi B',
+      enrollmentStatus: 'Registered',
+      grades: [
+        {
+          gradeComponentId: '11111111-1111-1111-1111-111111111111',
+          gradeId: '77777777-7777-7777-7777-777777777777',
+          score: 9.0,
+          gradedAtUtc: '2026-10-20T03:00:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '33333333-3333-3333-3333-333333333333',
+          gradeId: '88888888-8888-8888-8888-888888888888',
+          score: 8.0,
+          gradedAtUtc: '2026-10-20T03:00:00Z',
+          updatedAtUtc: null
+        }
+      ]
+    },
+    {
+      enrollmentId: '77777777-7777-7777-7777-777777777777',
+      studentId: '88888888-8888-8888-8888-888888888888',
+      studentCode: 'STU003',
+      fullName: 'Le Quang Huy',
+      enrollmentStatus: 'Registered',
+      grades: [
+        {
+          gradeComponentId: '11111111-1111-1111-1111-111111111111',
+          gradeId: '99999999-9999-9999-9999-999999999999',
+          score: 7.0,
+          gradedAtUtc: '2026-10-20T03:00:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '33333333-3333-3333-3333-333333333333',
+          gradeId: null,
+          score: null,
+          gradedAtUtc: null,
+          updatedAtUtc: null
+        }
+      ]
+    }
+  ],
+  page: 1,
+  pageSize: 20,
+  totalCount: 3
+}
 

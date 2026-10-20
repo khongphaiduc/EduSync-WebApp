@@ -409,3 +409,112 @@ export interface CreateGradeComponentResponse {
   message: string
   data?: ApiGradeComponentItem
 }
+
+export interface ApiGradeComponentListResponse {
+  success: boolean
+  message: string
+  data?: ApiGradeComponentItem[]
+  errors?: Record<string, string[]>
+}
+
+export interface LecturerScheduleItem {
+  id: string
+  courseSectionId: string
+  sectionCode: string
+  courseId: string
+  courseCode: string
+  courseName: string
+  semesterId: string
+  semesterName: string
+  startAtUtc: string
+  endAtUtc: string
+  room: string | null
+  topic: string | null
+  status: 'Scheduled' | 'Completed' | 'Cancelled' | string
+}
+
+export interface LecturerScheduleResponse {
+  success: boolean
+  message: string
+  data?: LecturerScheduleItem[]
+  errors?: Record<string, string[]>
+}
+
+export type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused'
+
+export interface SessionAttendanceItem {
+  enrollmentId: string
+  studentId?: string
+  studentCode: string
+  fullName: string
+  email?: string
+  avatar?: string
+  enrollmentStatus?: string
+  attendanceStatus: AttendanceStatus | null
+  status?: AttendanceStatus | null
+  note: string | null
+  recordedAtUtc?: string | null
+}
+
+export interface SessionAttendanceData {
+  classSessionId: string
+  courseSectionId: string
+  students: SessionAttendanceItem[]
+}
+
+export interface SessionAttendanceListResponse {
+  success: boolean
+  message: string
+  data?: SessionAttendanceData | SessionAttendanceItem[]
+  errors?: Record<string, string[]>
+}
+
+export interface UpdateAttendanceItemRequest {
+  enrollmentId: string
+  status: AttendanceStatus
+  note?: string | null
+}
+
+export interface UpdateAttendanceRequest {
+  items: UpdateAttendanceItemRequest[]
+}
+
+export interface UpdateAttendanceResponse {
+  success: boolean
+  message: string
+  data?: unknown
+  errors?: Record<string, string[]>
+}
+
+export interface StudentComponentGradeItem {
+  gradeComponentId: string
+  gradeId: string | null
+  score: number | null
+  gradedAtUtc: string | null
+  updatedAtUtc: string | null
+}
+
+export interface SectionStudentGradeItem {
+  enrollmentId: string
+  studentId: string
+  studentCode: string
+  fullName: string
+  enrollmentStatus: string
+  grades: StudentComponentGradeItem[]
+}
+
+export interface CourseSectionGradesData {
+  courseSectionId: string
+  components: ApiGradeComponentItem[]
+  students: SectionStudentGradeItem[]
+  page: number
+  pageSize: number
+  totalCount: number
+}
+
+export interface CourseSectionGradesResponse {
+  success: boolean
+  message: string
+  data?: CourseSectionGradesData
+  errors?: Record<string, string[]>
+}

@@ -28,7 +28,8 @@ import type {
   ApiCourseSectionListResponse,
   CreateGradeComponentRequest,
   CreateGradeComponentResponse,
-  ApiGradeComponentItem
+  ApiGradeComponentItem,
+  ApiGradeComponentListResponse
 } from '../../types'
 import {
   API_BASE_URL,
@@ -132,7 +133,54 @@ export const AdminSubjectsView: React.FC = () => {
   const [componentMaxScore, setComponentMaxScore] = useState<number | string>(10)
   const [isSubmittingComponent, setIsSubmittingComponent] = useState<boolean>(false)
   const [componentError, setComponentError] = useState<string | null>(null)
-  const [createdComponents, setCreatedComponents] = useState<ApiGradeComponentItem[]>([])
+  const [existingComponents, setExistingComponents] = useState<ApiGradeComponentItem[]>([])
+  const [isLoadingComponents, setIsLoadingComponents] = useState<boolean>(false)
+
+  // Gọi GET /api/course-sections/{sectionId}/grade-components
+  const fetchExistingComponents = useCallback(async (sectionId: string) => {
+    if (!sectionId) {
+      setExistingComponents([])
+      return
+    }
+    setIsLoadingComponents(true)
+    const token = localStorage.getItem('accessToken')
+    if (!token) {
+      setIsLoadingComponents(false)
+      return
+    }
+    try {
+      const response = await fetch(getGradeComponentsUrl(sectionId), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json'
+        }
+      })
+      if (response.ok) {
+        const json: ApiGradeComponentListResponse = await response.json()
+        if (json.success && Array.isArray(json.data)) {
+          setExistingComponents(json.data)
+        } else {
+          setExistingComponents([])
+        }
+      } else {
+        setExistingComponents([])
+      }
+    } catch {
+      setExistingComponents([])
+    } finally {
+      setIsLoadingComponents(false)
+    }
+  }, [])
+
+  // Tự động tải danh sách loại điểm khi chọn lớp học phần
+  useEffect(() => {
+    const secId = useCustomSectionId ? customSectionId.trim() : selectedSectionId
+    if (gradeComponentCourse && secId) {
+      fetchExistingComponents(secId)
+    } else {
+      setExistingComponents([])
+    }
+  }, [selectedSectionId, customSectionId, useCustomSectionId, gradeComponentCourse, fetchExistingComponents])
 
   // Mở modal tạo điểm thành phần và tải danh sách lớp học phần
   const handleOpenGradeComponentModal = async (course: ApiCourseItem) => {
@@ -141,7 +189,7 @@ export const AdminSubjectsView: React.FC = () => {
     setComponentWeight(30)
     setComponentMaxScore(10)
     setComponentError(null)
-    setCreatedComponents([])
+    setExistingComponents([])
     setSelectedSectionId('')
     setCustomSectionId('')
     setUseCustomSectionId(false)
@@ -235,9 +283,8 @@ export const AdminSubjectsView: React.FC = () => {
 
       if (response.status === 201 || (response.ok && json.success)) {
         showToast(`Đã tạo thành phần điểm "${payload.name}" (${payload.weight}%) thành công!`)
-        if (json.data) {
-          setCreatedComponents(prev => [...prev, json.data!])
-        }
+        // Tải lại danh sách điểm thành phần từ GET /api/course-sections/{sectionId}/grade-components
+        fetchExistingComponents(targetSectionId)
         // Gợi ý thành phần tiếp theo
         if (payload.name === 'Giữa kỳ') {
           setComponentName('Cuối kỳ')
@@ -1218,28 +1265,72 @@ export const AdminSubjectsView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Danh sách thành phần đã tạo trong phiên này */}
-              {createdComponents.length > 0 && (
-                <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-1.5">
-                  <div className="text-[11px] font-bold text-emerald-800 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Các thành phần điểm đã tạo:</span>
+              {/* Danh sách các loại điểm đã có của lớp học phần (GET /api/course-sections/{sectionId}/grade-components) */}
+              <div className="p-3 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold">
+                  <span className="text-slate-700 flex items-center gap-1.5">
+                    <Percent className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Các loại điểm hiện có của lớp:</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {isLoadingComponents ? (
+                      <span className="text-slate-400 font-normal flex items-center gap-1 text-[10px]">
+                        <RefreshCw className="w-3 h-3 animate-spin text-blue-600" /> Đang tải...
+                      </span>
+                    ) : (
+                      (() => {
+                        const totalW = existingComponents.reduce((sum, c) => sum + (c.weight || 0), 0)
+                        return (
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              totalW === 100
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : totalW > 100
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            Tổng trọng số: {totalW}% {totalW === 100 ? '✓' : totalW < 100 ? `(Thiếu ${100 - totalW}%)` : `(Thừa ${totalW - 100}%)`}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
+                </div>
+
+                {isLoadingComponents ? (
+                  <div className="py-4 text-center text-slate-400 text-[11px]">
+                    <RefreshCw className="w-4 h-4 animate-spin mx-auto mb-1 text-blue-600" />
+                    <span>Đang kết nối GET /api/course-sections/{useCustomSectionId ? customSectionId.trim() : selectedSectionId}/grade-components...</span>
+                  </div>
+                ) : existingComponents.length === 0 ? (
+                  <div className="py-3 text-center text-slate-400 text-[11px]">
+                    Lớp học phần này chưa được cấu hình loại điểm nào. Hãy tạo thành phần điểm đầu tiên bên dưới.
+                  </div>
+                ) : (
                   <div className="space-y-1">
-                    {createdComponents.map((c, i) => (
+                    {existingComponents.map((c, i) => (
                       <div
                         key={c.id || i}
-                        className="flex items-center justify-between bg-white px-2.5 py-1 rounded-lg border border-emerald-100 text-[11px]"
+                        className="flex items-center justify-between bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-[11px]"
                       >
-                        <span className="font-bold text-slate-800">{c.name}</span>
-                        <span className="font-semibold text-emerald-700">
-                          {c.weight}% (Thang {c.maxScore})
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-md bg-blue-50 text-blue-700 font-bold flex items-center justify-center text-[10px]">
+                            {i + 1}
+                          </span>
+                          <span className="font-bold text-slate-800">{c.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                            {c.weight}%
+                          </span>
+                          <span className="text-slate-500 font-medium">Thang {c.maxScore}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Footer Buttons */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">

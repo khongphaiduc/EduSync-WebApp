@@ -57,6 +57,26 @@ export const getCourseSectionStudentsUrl = (sectionId: string, page = 1, pageSiz
   `${appConfig.apiBaseUrl}/api/course-sections/${sectionId}/students?page=${page}&pageSize=${pageSize}`
 export const getGradeComponentsUrl = (sectionId: string) =>
   `${appConfig.apiBaseUrl}/api/course-sections/${sectionId}/grade-components`
+export const getLecturerScheduleUrl = (
+  from: string,
+  to: string,
+  timeZoneId = 'Asia/Ho_Chi_Minh'
+) =>
+  `${appConfig.apiBaseUrl}/api/lecturers/me/schedule?from=${encodeURIComponent(
+    from
+  )}&to=${encodeURIComponent(to)}&timeZoneId=${encodeURIComponent(timeZoneId)}`
+export const getStudentScheduleUrl = (
+  from: string,
+  to: string,
+  timeZoneId = 'Asia/Ho_Chi_Minh'
+) =>
+  `${appConfig.apiBaseUrl}/api/students/me/schedule?from=${encodeURIComponent(
+    from
+  )}&to=${encodeURIComponent(to)}&timeZoneId=${encodeURIComponent(timeZoneId)}`
+export const getSessionAttendanceUrl = (sessionId: string) =>
+  `${appConfig.apiBaseUrl}/api/class-sessions/${sessionId}/attendance`
+export const getCourseSectionGradesUrl = (sectionId: string, page = 1, pageSize = 20) =>
+  `${appConfig.apiBaseUrl}/api/course-sections/${sectionId}/grades?page=${page}&pageSize=${pageSize}`
 
 export default appConfig
 

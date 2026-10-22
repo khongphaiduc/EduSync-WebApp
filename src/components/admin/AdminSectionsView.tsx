@@ -19,7 +19,9 @@ import {
   Percent,
   Award,
   FileSpreadsheet,
-  Download
+  Download,
+  Save,
+  Edit3
 } from 'lucide-react'
 import type {
   ApiCourseItem,
@@ -36,13 +38,17 @@ import type {
   CreateGradeComponentRequest,
   CreateGradeComponentResponse,
   CourseSectionGradesData,
-  CourseSectionGradesResponse
+  CourseSectionGradesResponse,
+  UpdateGradeItemRequest,
+  BatchUpdateSectionGradesRequest,
+  BatchUpdateSectionGradesResponse
 } from '../../types'
 import {
   API_BASE_URL,
   getCourseSectionStudentsUrl,
   getGradeComponentsUrl,
-  getCourseSectionGradesUrl
+  getCourseSectionGradesUrl,
+  getUpdateCourseSectionGradesUrl
 } from '../../config'
 import {
   DEMO_SECTION_GRADES,
@@ -134,6 +140,11 @@ export const AdminSectionsView: React.FC = () => {
   const [isLoadingGrades, setIsLoadingGrades] = useState<boolean>(false)
   const [gradesError, setGradesError] = useState<string | null>(null)
   const [gradesSearch, setGradesSearch] = useState<string>('')
+
+  // Quản lý nhập/chỉnh sửa điểm trực tiếp bằng PUT /api/course-sections/{sectionId}/grades
+  const [isAdminGradesEditing, setIsAdminGradesEditing] = useState<boolean>(false)
+  const [isSavingAdminGrades, setIsSavingAdminGrades] = useState<boolean>(false)
+  const [adminGradesHasChanges, setAdminGradesHasChanges] = useState<boolean>(false)
 
   // Gọi API GET /api/course-sections/{sectionId}/grade-components
   const fetchSectionGradeComponents = useCallback(async (sectionId: string) => {
@@ -529,6 +540,105 @@ export const AdminSectionsView: React.FC = () => {
       passedCount
     }
   }, [gradesData, sortedAdminComponents])
+
+  // Xử lý thay đổi điểm số của sinh viên khi Admin nhập/sửa điểm
+  const handleAdminScoreChange = (enrollmentId: string, gradeComponentId: string, val: string) => {
+    let numVal: number | null = parseFloat(val)
+    if (isNaN(numVal) || val === '') {
+      numVal = null
+    } else {
+      if (numVal < 0) numVal = 0
+      if (numVal > 10) numVal = 10
+    }
+
+    const now = new Date().toISOString()
+    setGradesData(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        students: prev.students.map(st => {
+          if (st.enrollmentId !== enrollmentId) return st
+          const curGrades = st.grades || []
+          const exists = curGrades.find(
+            g => (g.gradeComponentId || '').toLowerCase() === (gradeComponentId || '').toLowerCase()
+          )
+          let newGrades = [...curGrades]
+          if (exists) {
+            newGrades = newGrades.map(g => {
+              if ((g.gradeComponentId || '').toLowerCase() === (gradeComponentId || '').toLowerCase()) {
+                return {
+                  ...g,
+                  score: numVal,
+                  gradeId: numVal === null ? null : (g.gradeId || `grade-${Date.now()}`),
+                  gradedAtUtc: numVal === null ? null : (g.gradedAtUtc || now),
+                  updatedAtUtc: numVal === null ? null : now
+                }
+              }
+              return g
+            })
+          } else {
+            newGrades.push({
+              gradeComponentId,
+              gradeId: numVal === null ? null : `grade-${Date.now()}`,
+              score: numVal,
+              gradedAtUtc: numVal === null ? null : now,
+              updatedAtUtc: null
+            })
+          }
+          return { ...st, grades: newGrades }
+        })
+      }
+    })
+    setAdminGradesHasChanges(true)
+  }
+
+  // Gọi API PUT /api/course-sections/{sectionId}/grades để nhập/cập nhật điểm nhiều sinh viên trong một request
+  const handleSaveAdminGrades = async () => {
+    if (!gradesData || !viewingGradesSection) return
+
+    const items: UpdateGradeItemRequest[] = []
+    gradesData.students.forEach(st => {
+      ;(st.grades || []).forEach(g => {
+        if (typeof g.score === 'number' && !isNaN(g.score)) {
+          items.push({
+            enrollmentId: st.enrollmentId,
+            gradeComponentId: g.gradeComponentId,
+            score: g.score
+          })
+        }
+      })
+    })
+
+    setIsSavingAdminGrades(true)
+    const token = localStorage.getItem('accessToken')
+    const url = getUpdateCourseSectionGradesUrl(viewingGradesSection.id)
+    const payload: BatchUpdateSectionGradesRequest = { items }
+
+    try {
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (res.ok) {
+        setAdminGradesHasChanges(false)
+        showToast(`Đã lưu và cập nhật thành công ${items.length} đầu điểm qua PUT API!`)
+      } else {
+        const err: BatchUpdateSectionGradesResponse | null = await res.json().catch(() => null)
+        showToast(err?.message || `Lỗi ${res.status}: Không thể lưu bảng điểm qua API PUT.`)
+      }
+    } catch {
+      setAdminGradesHasChanges(false)
+      showToast(`(Chế độ Mock) Đã giả lập lưu thành công ${items.length} đầu điểm qua PUT API!`)
+    } finally {
+      setIsSavingAdminGrades(false)
+    }
+  }
 
   // Xuất file CSV bảng điểm
   const handleExportGradesCsv = () => {
@@ -2117,14 +2227,24 @@ export const AdminSectionsView: React.FC = () => {
                 <span className="font-mono text-emerald-950 font-medium text-[11px]">
                   /api/course-sections/
                   <span className="text-slate-800 font-bold">{viewingGradesSection.id}</span>
-                  /grades?page={gradesPage}&pageSize={gradesPageSize}
+                  /grades
                 </span>
+
+                <span className="text-slate-400">•</span>
+
+                <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white font-mono font-bold text-[10px]">
+                  PUT
+                </span>
+                <span className="font-mono text-blue-950 font-medium text-[11px]">
+                  /api/course-sections/{viewingGradesSection.id}/grades
+                </span>
+
                 <span className="px-2 py-0.5 rounded-md bg-white border border-emerald-200 text-emerald-700 text-[10px] font-semibold">
-                  Bearer &lt;adminAccessToken&gt;
+                  Bearer &lt;admin / GV phụ trách&gt;
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 self-end sm:self-auto">
+              <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
                 {/* Bộ chọn Chế độ hiển thị cột điểm */}
                 <div className="inline-flex rounded-xl bg-emerald-100/60 p-1 border border-emerald-200 text-xs flex-wrap gap-1">
                   <button
@@ -2176,6 +2296,46 @@ export const AdminSectionsView: React.FC = () => {
                     Chưa tạo cột điểm
                   </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAdminGradesEditing(prev => !prev)}
+                  className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isAdminGradesEditing
+                      ? 'bg-amber-500 border-amber-600 text-white shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                  }`}
+                  title="Bật/Tắt chế độ nhập và sửa điểm trực tiếp cho sinh viên"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>{isAdminGradesEditing ? 'Đang sửa điểm' : 'Nhập điểm'}</span>
+                </button>
+
+                {isAdminGradesEditing && (
+                  <button
+                    type="button"
+                    onClick={handleSaveAdminGrades}
+                    disabled={!adminGradesHasChanges || isSavingAdminGrades}
+                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                      adminGradesHasChanges && !isSavingAdminGrades
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                        : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                    }`}
+                    title="Lưu các đầu điểm đã nhập qua API PUT /api/course-sections/{sectionId}/grades"
+                  >
+                    {isSavingAdminGrades ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Đang lưu...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Lưu điểm (PUT API)</span>
+                      </>
+                    )}
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -2449,7 +2609,18 @@ export const AdminSectionsView: React.FC = () => {
                                         key={comp.id}
                                         className="py-3 px-3 text-center border-l border-slate-100"
                                       >
-                                        {hasScore ? (
+                                        {isAdminGradesEditing ? (
+                                          <input
+                                            type="number"
+                                            step="0.1"
+                                            min="0"
+                                            max={comp.maxScore || 10}
+                                            placeholder="Trống"
+                                            value={score !== null && score !== undefined ? score : ''}
+                                            onChange={e => handleAdminScoreChange(st.enrollmentId, comp.id, e.target.value)}
+                                            className="w-16 px-1.5 py-1 text-center font-bold text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-slate-800"
+                                          />
+                                        ) : hasScore ? (
                                           <span
                                             className="inline-block px-2.5 py-1 rounded-lg font-bold text-slate-800 bg-slate-50 border border-slate-200 text-xs"
                                             title={g?.gradedAtUtc ? `Chấm lúc: ${g.gradedAtUtc}` : undefined}

@@ -518,3 +518,20 @@ export interface CourseSectionGradesResponse {
   data?: CourseSectionGradesData
   errors?: Record<string, string[]>
 }
+
+export interface UpdateGradeItemRequest {
+  enrollmentId: string
+  gradeComponentId: string
+  score: number
+}
+
+export interface BatchUpdateSectionGradesRequest {
+  items: UpdateGradeItemRequest[]
+}
+
+export interface BatchUpdateSectionGradesResponse {
+  success: boolean
+  message: string
+  data?: unknown
+  errors?: Record<string, string[]>
+}

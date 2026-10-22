@@ -77,6 +77,8 @@ export const getSessionAttendanceUrl = (sessionId: string) =>
   `${appConfig.apiBaseUrl}/api/class-sessions/${sessionId}/attendance`
 export const getCourseSectionGradesUrl = (sectionId: string, page = 1, pageSize = 20) =>
   `${appConfig.apiBaseUrl}/api/course-sections/${sectionId}/grades?page=${page}&pageSize=${pageSize}`
+export const getUpdateCourseSectionGradesUrl = (sectionId: string) =>
+  `${appConfig.apiBaseUrl}/api/course-sections/${sectionId}/grades`
 
 export default appConfig
 

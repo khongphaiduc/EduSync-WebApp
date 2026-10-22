@@ -11,17 +11,32 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
-  Layers
+  Layers,
+  Code2,
+  Copy,
+  Check,
+  X,
+  Info,
+  Plus,
+  Trash2
 } from 'lucide-react'
 import type {
   StudentGrade,
   ClassItem,
   CourseSectionGradesData,
   CourseSectionGradesResponse,
-  SectionStudentGradeItem
+  SectionStudentGradeItem,
+  ApiCourseSectionItem,
+  ApiCourseSectionListResponse,
+  ApiGradeComponentItem
 } from '../types'
-import { getCourseSectionGradesUrl } from '../config'
-import { DEMO_SECTION_GRADES } from '../mockData'
+import { getCourseSectionGradesUrl, getLecturerCourseSectionsUrl } from '../config'
+import {
+  DEMO_SECTION_GRADES,
+  FULL_SAMPLE_SECTION_GRADES,
+  EMPTY_STUDENTS_SECTION_GRADES,
+  EMPTY_COMPONENTS_SECTION_GRADES
+} from '../mockData'
 
 interface GradeEntryViewProps {
   classes?: ClassItem[]
@@ -33,14 +48,18 @@ interface GradeEntryViewProps {
 export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
   classes = [],
   onSaveGrades,
-  initialSectionId = '22222222-2222-2222-2222-222222222222'
+  initialSectionId = '11111111-1111-1111-1111-111111111111'
 }) => {
   // Quản lý lớp học phần đang được chọn
   const [selectedSectionId, setSelectedSectionId] = useState<string>(initialSectionId)
   const [isCustomSection, setIsCustomSection] = useState<boolean>(false)
   const [customSectionInput, setCustomSectionInput] = useState<string>('')
 
+  // Danh sách các lớp học phần thực tế của giảng viên từ GET /api/lecturers/me/course-sections
+  const [lecturerSections, setLecturerSections] = useState<ApiCourseSectionItem[]>([])
+
   // Dữ liệu bảng điểm từ API GET /api/course-sections/{sectionId}/grades
+  // Khởi tạo mặc định với bộ dữ liệu chuẩn 200 OK (2 cột: Giữa kỳ 30%, Cuối kỳ 70%, STU001)
   const [sectionGrades, setSectionGrades] = useState<CourseSectionGradesData>(DEMO_SECTION_GRADES)
   const [page, setPage] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(20)
@@ -48,13 +67,65 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [apiError, setApiError] = useState<string | null>(null)
 
-  // Local edited student grades map: enrollmentId -> SectionStudentGradeItem
+  // Lưu trữ raw payload response để hiển thị JSON inspector
+  const [rawApiResponse, setRawApiResponse] = useState<CourseSectionGradesResponse | null>({
+    success: true,
+    message: 'Success',
+    data: DEMO_SECTION_GRADES
+  })
+  const [showJsonInspector, setShowJsonInspector] = useState<boolean>(false)
+  const [copiedJson, setCopiedJson] = useState<boolean>(false)
+
+  // Local edited student grades list: SectionStudentGradeItem[]
   const [localStudents, setLocalStudents] = useState<SectionStudentGradeItem[]>(
     DEMO_SECTION_GRADES.students || []
   )
   const [searchStudent, setSearchStudent] = useState('')
   const [hasChanges, setHasChanges] = useState(false)
   const [saveSuccessMessage, setSaveSuccessMessage] = useState(false)
+
+  // Quản lý Modal thêm cột điểm thành phần mới & Preset hiển thị
+  const [showAddComponentModal, setShowAddComponentModal] = useState<boolean>(false)
+  const [newCompName, setNewCompName] = useState<string>('')
+  const [newCompWeight, setNewCompWeight] = useState<string>('20')
+  const [newCompMaxScore, setNewCompMaxScore] = useState<string>('10')
+  const [selectedPresetMode, setSelectedPresetMode] = useState<
+    'api_sample' | 'full' | 'empty_students' | 'empty_components'
+  >('api_sample')
+
+  // Đồng bộ selectedSectionId khi initialSectionId thay đổi từ ngoài truyền vào
+  useEffect(() => {
+    if (initialSectionId) {
+      setSelectedSectionId(initialSectionId)
+      setIsCustomSection(false)
+    }
+  }, [initialSectionId])
+
+  // Tải danh sách lớp học phần của giảng viên để điền vào dropdown
+  useEffect(() => {
+    const fetchLecturerSections = async () => {
+      const token = localStorage.getItem('accessToken')
+      try {
+        const url = getLecturerCourseSectionsUrl(1, 100)
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        })
+        if (res.ok) {
+          const json: ApiCourseSectionListResponse = await res.json()
+          if (json.success && json.data?.items) {
+            setLecturerSections(json.data.items)
+          }
+        }
+      } catch {
+        // im lặng nếu không có kết nối backend
+      }
+    }
+    fetchLecturerSections()
+  }, [])
 
   // Gọi API GET /api/course-sections/{sectionId}/grades?page={page}&pageSize={pageSize}
   const fetchGrades = useCallback(
@@ -80,30 +151,96 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
             setLocalStudents(json.data.students || [])
             setPage(json.data.page || targetPage)
             setPageSize(json.data.pageSize || targetPageSize)
-            setTotalCount(json.data.totalCount || 0)
+            setTotalCount(json.data.totalCount || (json.data.students ? json.data.students.length : 0))
+            setRawApiResponse(json)
             setHasChanges(false)
             return
           }
+        } else {
+          // Xử lý các lỗi thường gặp theo tài liệu API:
+          // 400: Tham số không hợp lệ
+          // 401: Thiếu hoặc sai token
+          // 403: Không có quyền hoặc giảng viên không được phân công
+          // 404: Lớp học phần không tồn tại
+          const errJson = await response.json().catch(() => null)
+          let errorMsg = ''
+          if (response.status === 400) {
+            errorMsg = errJson?.message || 'Lỗi 400 (Bad Request): Tham số truy vấn không hợp lệ (Mã lớp học phần, page hoặc pageSize không hợp lệ).'
+          } else if (response.status === 401) {
+            errorMsg = errJson?.message || 'Lỗi 401 (Unauthorized): Thiếu hoặc sai Access Token. Vui lòng đăng nhập lại.'
+          } else if (response.status === 403) {
+            errorMsg = errJson?.message || 'Lỗi 403 (Forbidden): Bạn không có quyền truy cập hoặc giảng viên không được phân công cho lớp học phần này.'
+          } else if (response.status === 404) {
+            errorMsg = errJson?.message || `Lỗi 404 (Not Found): Lớp học phần với mã "${secId}" không tồn tại trên hệ thống.`
+          } else {
+            errorMsg = errJson?.message || `Lỗi máy chủ (${response.status}): Không thể tải bảng điểm.`
+          }
+          setApiError(errorMsg)
         }
-        // Fallback sang demo data
-        setSectionGrades({
-          ...DEMO_SECTION_GRADES,
+
+        // Fallback sang mock data theo chế độ preset đang chọn
+        const baseData =
+          selectedPresetMode === 'full'
+            ? FULL_SAMPLE_SECTION_GRADES
+            : selectedPresetMode === 'empty_students'
+            ? EMPTY_STUDENTS_SECTION_GRADES
+            : selectedPresetMode === 'empty_components'
+            ? EMPTY_COMPONENTS_SECTION_GRADES
+            : DEMO_SECTION_GRADES
+
+        const fallbackData: CourseSectionGradesData = {
+          ...baseData,
           courseSectionId: secId
+        }
+        setSectionGrades(fallbackData)
+        setLocalStudents(fallbackData.students)
+        setTotalCount(fallbackData.totalCount)
+        setRawApiResponse({
+          success: true,
+          message:
+            selectedPresetMode === 'full'
+              ? 'Success (Mock payload - Đầy đủ 4 cột thành phần)'
+              : selectedPresetMode === 'empty_students'
+              ? 'Success (Mock payload - Lớp chưa có sinh viên: students = [])'
+              : selectedPresetMode === 'empty_components'
+              ? 'Success (Mock payload - Chưa tạo cột điểm: components = [])'
+              : 'Success (Mock payload chuẩn 200 OK - Giữa kỳ 30%, Cuối kỳ 70%)',
+          data: fallbackData
         })
-        setLocalStudents(DEMO_SECTION_GRADES.students)
-        setTotalCount(DEMO_SECTION_GRADES.totalCount)
       } catch {
-        setSectionGrades({
-          ...DEMO_SECTION_GRADES,
+        const baseData =
+          selectedPresetMode === 'full'
+            ? FULL_SAMPLE_SECTION_GRADES
+            : selectedPresetMode === 'empty_students'
+            ? EMPTY_STUDENTS_SECTION_GRADES
+            : selectedPresetMode === 'empty_components'
+            ? EMPTY_COMPONENTS_SECTION_GRADES
+            : DEMO_SECTION_GRADES
+
+        const fallbackData: CourseSectionGradesData = {
+          ...baseData,
           courseSectionId: secId
+        }
+        setSectionGrades(fallbackData)
+        setLocalStudents(fallbackData.students)
+        setTotalCount(fallbackData.totalCount)
+        setRawApiResponse({
+          success: true,
+          message:
+            selectedPresetMode === 'full'
+              ? 'Success (Mock payload - Đầy đủ 4 cột thành phần)'
+              : selectedPresetMode === 'empty_students'
+              ? 'Success (Mock payload - Lớp chưa có sinh viên: students = [])'
+              : selectedPresetMode === 'empty_components'
+              ? 'Success (Mock payload - Chưa tạo cột điểm: components = [])'
+              : 'Success (Mock payload chuẩn 200 OK - Giữa kỳ 30%, Cuối kỳ 70%)',
+          data: fallbackData
         })
-        setLocalStudents(DEMO_SECTION_GRADES.students)
-        setTotalCount(DEMO_SECTION_GRADES.totalCount)
       } finally {
         setIsLoading(false)
       }
     },
-    []
+    [selectedPresetMode]
   )
 
   useEffect(() => {
@@ -130,7 +267,156 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
     setHasChanges(false)
   }
 
-  // Cập nhật điểm thành phần của một sinh viên
+  // 1. Nạp bộ Payload mẫu API 200 OK chuẩn (2 cột: Giữa kỳ 30%, Cuối kỳ 70%)
+  const handleLoadApiSamplePayload = () => {
+    setSelectedPresetMode('api_sample')
+    setSectionGrades(DEMO_SECTION_GRADES)
+    setLocalStudents(DEMO_SECTION_GRADES.students)
+    setTotalCount(DEMO_SECTION_GRADES.totalCount)
+    setRawApiResponse({
+      success: true,
+      message: 'Success (Mẫu API chuẩn 200 OK - 2 cột Giữa kỳ 30%, Cuối kỳ 70%)',
+      data: DEMO_SECTION_GRADES
+    })
+    setHasChanges(false)
+  }
+
+  // 2. Nạp bộ điểm ĐẦY ĐỦ TẤT CẢ THÀNH PHẦN (Chuyên cần 10%, Thực hành 20%, Giữa kỳ 30%, Cuối kỳ 40% = 100%)
+  const handleLoadFullGradebook = () => {
+    setSelectedPresetMode('full')
+    setSectionGrades(FULL_SAMPLE_SECTION_GRADES)
+    setLocalStudents(FULL_SAMPLE_SECTION_GRADES.students)
+    setTotalCount(FULL_SAMPLE_SECTION_GRADES.totalCount)
+    setRawApiResponse({
+      success: true,
+      message: 'Success (Đầy đủ tất cả thành phần điểm)',
+      data: FULL_SAMPLE_SECTION_GRADES
+    })
+    setHasChanges(false)
+  }
+
+  // 3. Nạp trường hợp lớp chưa có sinh viên: students = []
+  const handleLoadEmptyStudents = () => {
+    setSelectedPresetMode('empty_students')
+    setSectionGrades(EMPTY_STUDENTS_SECTION_GRADES)
+    setLocalStudents(EMPTY_STUDENTS_SECTION_GRADES.students)
+    setTotalCount(0)
+    setRawApiResponse({
+      success: true,
+      message: 'Success (Lớp học phần chưa có sinh viên: students = [])',
+      data: EMPTY_STUDENTS_SECTION_GRADES
+    })
+    setHasChanges(false)
+  }
+
+  // 4. Nạp trường hợp chưa tạo cột điểm: components = []
+  const handleLoadEmptyComponents = () => {
+    setSelectedPresetMode('empty_components')
+    setSectionGrades(EMPTY_COMPONENTS_SECTION_GRADES)
+    setLocalStudents(EMPTY_COMPONENTS_SECTION_GRADES.students)
+    setTotalCount(EMPTY_COMPONENTS_SECTION_GRADES.totalCount)
+    setRawApiResponse({
+      success: true,
+      message: 'Success (Chưa tạo cột điểm thành phần: components = [])',
+      data: EMPTY_COMPONENTS_SECTION_GRADES
+    })
+    setHasChanges(false)
+  }
+
+  // Thêm thành phần điểm mới
+  const handleAddComponentSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newCompName.trim()) return
+
+    const parsedWeight = parseFloat(newCompWeight) || 10
+    const parsedMaxScore = parseFloat(newCompMaxScore) || 10
+    const newCompId = crypto.randomUUID ? crypto.randomUUID() : `comp-${Date.now()}`
+
+    const newComp: ApiGradeComponentItem = {
+      id: newCompId,
+      courseSectionId: selectedSectionId,
+      name: newCompName.trim(),
+      weight: parsedWeight,
+      maxScore: parsedMaxScore
+    }
+
+    setSectionGrades(prev => ({
+      ...prev,
+      components: [...(prev.components || []), newComp]
+    }))
+
+    // Cập nhật sinh viên với điểm null cho thành phần mới
+    setLocalStudents(prev =>
+      prev.map(st => ({
+        ...st,
+        grades: [
+          ...(st.grades || []),
+          {
+            gradeComponentId: newCompId,
+            gradeId: null,
+            score: null,
+            gradedAtUtc: null,
+            updatedAtUtc: null
+          }
+        ]
+      }))
+    )
+
+    setHasChanges(true)
+    setShowAddComponentModal(false)
+    setNewCompName('')
+    setNewCompWeight('20')
+  }
+
+  // Xóa một cột thành phần điểm
+  const handleDeleteComponent = (compId: string, compName: string) => {
+    if (!confirm(`Bạn có chắc muốn xóa cột điểm "${compName}" không?`)) return
+
+    setSectionGrades(prev => ({
+      ...prev,
+      components: (prev.components || []).filter(c => c.id !== compId)
+    }))
+
+    setLocalStudents(prev =>
+      prev.map(st => ({
+        ...st,
+        grades: (st.grades || []).filter(
+          g => (g.gradeComponentId || '').toLowerCase() !== (compId || '').toLowerCase()
+        )
+      }))
+    )
+
+    setHasChanges(true)
+  }
+
+  // Thêm / bớt sinh viên mẫu chưa có điểm (null) để kiểm tra quy tắc null
+  const handleToggleNullStudent = () => {
+    const hasNullStudent = localStudents.some(s => s.studentCode === 'STU002')
+    if (hasNullStudent) {
+      setLocalStudents(prev => prev.filter(s => s.studentCode !== 'STU002'))
+      setTotalCount(prev => Math.max(1, prev - 1))
+    } else {
+      const nullStudent: SectionStudentGradeItem = {
+        enrollmentId: '33333333-3333-3333-3333-333333333334',
+        studentId: '44444444-4444-4444-4444-444444444445',
+        studentCode: 'STU002',
+        fullName: 'Trần Thị B (Chưa chấm điểm)',
+        enrollmentStatus: 'Registered',
+        grades: (sectionGrades.components || []).map(c => ({
+          gradeComponentId: c.id,
+          gradeId: null,
+          score: null,
+          gradedAtUtc: null,
+          updatedAtUtc: null
+        }))
+      }
+      setLocalStudents(prev => [...prev, nullStudent])
+      setTotalCount(prev => prev + 1)
+    }
+  }
+
+  // Cập nhật điểm thành phần của một sinh viên:
+  // "Nếu sinh viên chưa có điểm ở một thành phần, gradeId, score và các thời điểm chấm điểm sẽ là null."
   const handleScoreChange = (enrollmentId: string, gradeComponentId: string, value: string) => {
     let numVal: number | null = parseFloat(value)
     if (isNaN(numVal) || value === '') {
@@ -140,23 +426,43 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
       if (numVal > 10) numVal = 10
     }
 
+    const now = new Date().toISOString()
+
     setLocalStudents(prev =>
       prev.map(st => {
         if (st.enrollmentId === enrollmentId) {
-          const existingGrade = st.grades.find(g => g.gradeComponentId === gradeComponentId)
-          let updatedGrades = [...st.grades]
+          const currentGrades = st.grades || []
+          const existingGrade = currentGrades.find(
+            g => (g.gradeComponentId || '').toLowerCase() === (gradeComponentId || '').toLowerCase()
+          )
+          let updatedGrades = [...currentGrades]
           if (existingGrade) {
-            updatedGrades = updatedGrades.map(g =>
-              g.gradeComponentId === gradeComponentId
-                ? { ...g, score: numVal, updatedAtUtc: new Date().toISOString() }
-                : g
-            )
+            updatedGrades = updatedGrades.map(g => {
+              if ((g.gradeComponentId || '').toLowerCase() === (gradeComponentId || '').toLowerCase()) {
+                if (numVal === null) {
+                  return {
+                    ...g,
+                    gradeId: null,
+                    score: null,
+                    gradedAtUtc: null,
+                    updatedAtUtc: null
+                  }
+                }
+                return {
+                  ...g,
+                  score: numVal,
+                  gradedAtUtc: g.gradedAtUtc || now,
+                  updatedAtUtc: g.gradedAtUtc ? now : null
+                }
+              }
+              return g
+            })
           } else {
             updatedGrades.push({
               gradeComponentId,
               gradeId: null,
               score: numVal,
-              gradedAtUtc: new Date().toISOString(),
+              gradedAtUtc: numVal === null ? null : now,
               updatedAtUtc: null
             })
           }
@@ -171,65 +477,112 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
     setHasChanges(true)
   }
 
+  // Theo đặc tả API: "Cột điểm được sắp theo name"
+  const sortedComponents = useMemo(() => {
+    return [...(sectionGrades.components || [])].sort((a, b) =>
+      (a.name || '').localeCompare(b.name || '', 'vi')
+    )
+  }, [sectionGrades.components])
+
+  // Theo đặc tả API: "Sinh viên được sắp theo studentCode"
+  const sortedStudents = useMemo(() => {
+    const list = !searchStudent.trim()
+      ? localStudents
+      : localStudents.filter(
+          st =>
+            (st.fullName && st.fullName.toLowerCase().includes(searchStudent.toLowerCase().trim())) ||
+            (st.studentCode && st.studentCode.toLowerCase().includes(searchStudent.toLowerCase().trim()))
+        )
+    return [...list].sort((a, b) => (a.studentCode || '').localeCompare(b.studentCode || ''))
+  }, [localStudents, searchStudent])
+
   // Tính điểm tổng kết có trọng số cho 1 sinh viên
   const calculateStudentTotal = (st: SectionStudentGradeItem) => {
-    const comps = sectionGrades.components || []
+    const comps = sortedComponents
+    const totalWeight = comps.reduce((acc, c) => acc + (c.weight || 0), 0)
     let weightedScore = 0
-    let hasAnyScore = false
+    let gradedCount = 0
 
     comps.forEach(c => {
-      const g = st.grades.find(item => item.gradeComponentId === c.id)
-      if (g && typeof g.score === 'number') {
-        hasAnyScore = true
+      const g = (st.grades || []).find(
+        item => (item.gradeComponentId || '').toLowerCase() === (c.id || '').toLowerCase()
+      )
+      if (g && typeof g.score === 'number' && g.score !== null) {
+        gradedCount++
         weightedScore += (g.score / (c.maxScore || 10)) * 10 * (c.weight / 100)
       }
     })
 
-    const total = Number(weightedScore.toFixed(1))
-    let letter = '-'
-    let status: 'Đạt' | 'Cảnh báo' | 'Không đạt' | 'Chưa chấm' = 'Chưa chấm'
+    const hasAnyScore = gradedCount > 0
+    const allGraded = comps.length > 0 && gradedCount === comps.length
 
-    if (hasAnyScore) {
-      if (total >= 9.0) letter = 'A+'
-      else if (total >= 8.5) letter = 'A'
-      else if (total >= 8.0) letter = 'B+'
-      else if (total >= 7.0) letter = 'B'
-      else if (total >= 6.5) letter = 'C+'
-      else if (total >= 5.5) letter = 'C'
-      else if (total >= 5.0) letter = 'D+'
-      else if (total >= 4.0) letter = 'D'
+    // Điểm tổng kết hệ 10
+    const total = Number(weightedScore.toFixed(1))
+    // Điểm quy đổi nếu tổng trọng số chưa đạt 100%
+    const normalizedScore =
+      totalWeight > 0 ? Number(((weightedScore / totalWeight) * 10).toFixed(1)) : total
+
+    let letter = '-'
+    let status: 'Đạt' | 'Cảnh báo' | 'Không đạt' | 'Chưa chấm' | 'Chưa hoàn tất' | 'Chưa tạo cột' = 'Chưa chấm'
+
+    if (comps.length === 0) {
+      status = 'Chưa tạo cột'
+    } else if (hasAnyScore) {
+      const evalScore = totalWeight === 100 ? total : normalizedScore
+      if (evalScore >= 9.0) letter = 'A+'
+      else if (evalScore >= 8.5) letter = 'A'
+      else if (evalScore >= 8.0) letter = 'B+'
+      else if (evalScore >= 7.0) letter = 'B'
+      else if (evalScore >= 6.5) letter = 'C+'
+      else if (evalScore >= 5.5) letter = 'C'
+      else if (evalScore >= 5.0) letter = 'D+'
+      else if (evalScore >= 4.0) letter = 'D'
       else letter = 'F'
 
-      if (total >= 5.0) {
-        status = 'Đạt'
-      } else if (total >= 4.0) {
-        status = 'Cảnh báo'
+      if (allGraded && totalWeight === 100) {
+        if (evalScore >= 5.0) {
+          status = 'Đạt'
+        } else if (evalScore >= 4.0) {
+          status = 'Cảnh báo'
+        } else {
+          status = 'Không đạt'
+        }
       } else {
-        status = 'Không đạt'
+        status = 'Chưa hoàn tất'
       }
     }
 
-    return { total, letter, status, hasAnyScore }
+    return {
+      total,
+      normalizedScore,
+      letter,
+      status,
+      hasAnyScore,
+      allGraded,
+      gradedCount,
+      totalComps: comps.length,
+      totalWeight
+    }
   }
 
   // Lưu bảng điểm
   const handleSave = () => {
     if (onSaveGrades) {
-      // Chuyển đổi định dạng nếu cần cho legacy mock
       const legacyGrades: StudentGrade[] = localStudents.map(st => {
         const { total, letter, status } = calculateStudentTotal(st)
+        const stGrades = st.grades || []
         return {
           id: st.enrollmentId,
           studentCode: st.studentCode,
           fullName: st.fullName,
-          avatar: `https://images.unsplash.com/photo-${1534528741775 + 10}?w=150&auto=format&fit=crop&q=80`,
+          avatar: `https://images.unsplash.com/photo-1534528741775?w=150&auto=format&fit=crop&q=80`,
           attendance: 10,
-          midterm: st.grades[0]?.score || 0,
+          midterm: stGrades[0]?.score || 0,
           practical: 0,
-          finalExam: st.grades[1]?.score || 0,
+          finalExam: stGrades[1]?.score || 0,
           totalScore: total,
           letterGrade: letter,
-          status: status === 'Chưa chấm' ? 'Không đạt' : status
+          status: status === 'Chưa chấm' ? 'Không đạt' : status === 'Chưa hoàn tất' ? 'Cảnh báo' : status === 'Chưa tạo cột' ? 'Không đạt' : status
         }
       })
       onSaveGrades(selectedSectionId, legacyGrades)
@@ -239,17 +592,6 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
     setSaveSuccessMessage(true)
     setTimeout(() => setSaveSuccessMessage(false), 3500)
   }
-
-  // Lọc tìm kiếm sinh viên
-  const filteredStudents = useMemo(() => {
-    if (!searchStudent.trim()) return localStudents
-    const q = searchStudent.toLowerCase().trim()
-    return localStudents.filter(
-      st =>
-        (st.fullName && st.fullName.toLowerCase().includes(q)) ||
-        (st.studentCode && st.studentCode.toLowerCase().includes(q))
-    )
-  }, [localStudents, searchStudent])
 
   // Thống kê nhanh
   const stats = useMemo(() => {
@@ -263,8 +605,8 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
       const res = calculateStudentTotal(st)
       if (res.hasAnyScore) {
         gradedCount++
-        totalScoreSum += res.total
-        if (res.status === 'Đạt') passedCount++
+        totalScoreSum += res.normalizedScore
+        if (res.status === 'Đạt' || res.normalizedScore >= 5.0) passedCount++
         else warningCount++
       }
     })
@@ -280,11 +622,11 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
       passedCount,
       warningCount
     }
-  }, [localStudents, totalCount, sectionGrades])
+  }, [localStudents, totalCount, sortedComponents])
 
   // Xuất file CSV bảng điểm
   const handleExportCsv = () => {
-    const comps = sectionGrades.components || []
+    const comps = sortedComponents
     const headers = [
       'STT',
       'Mã SV',
@@ -296,11 +638,14 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
       'Kết quả'
     ]
 
-    const rows = localStudents.map((st, idx) => {
+    const rows = sortedStudents.map((st, idx) => {
       const { total, letter, status } = calculateStudentTotal(st)
+      const stGrades = st.grades || []
       const compScores = comps.map(c => {
-        const g = st.grades.find(item => item.gradeComponentId === c.id)
-        return g && typeof g.score === 'number' ? g.score : ''
+        const g = stGrades.find(
+          item => (item.gradeComponentId || '').toLowerCase() === (c.id || '').toLowerCase()
+        )
+        return g && typeof g.score === 'number' && g.score !== null ? g.score : ''
       })
 
       return [
@@ -327,6 +672,21 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
     document.body.removeChild(link)
   }
 
+  // Copy raw JSON to clipboard
+  const handleCopyJson = () => {
+    const currentPayload: CourseSectionGradesResponse = rawApiResponse || {
+      success: true,
+      message: 'Success',
+      data: {
+        ...sectionGrades,
+        students: localStudents
+      }
+    }
+    navigator.clipboard.writeText(JSON.stringify(currentPayload, null, 2))
+    setCopiedJson(true)
+    setTimeout(() => setCopiedJson(false), 2000)
+  }
+
   const totalPages = Math.ceil((totalCount || 1) / pageSize) || 1
 
   return (
@@ -338,7 +698,7 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
             <FileSpreadsheet className="w-4 h-4" />
             <span>Phân hệ Đào tạo & Quản lý Điểm số</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight mt-1 flex items-center gap-2.5">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight mt-1 flex items-center gap-2.5 flex-wrap">
             <span>Bảng Điểm Học Phần</span>
             <span className="px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-mono font-bold border border-blue-200">
               GET /api/course-sections/{'{sectionId}'}/grades
@@ -354,11 +714,16 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
           <select
             value={isCustomSection ? 'CUSTOM' : selectedSectionId}
             onChange={e => handleSelectSection(e.target.value)}
-            className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer min-w-[240px]"
+            className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer min-w-[260px] max-w-full"
           >
-            <option value="22222222-2222-2222-2222-222222222222">
-              Lớp API: CS101-01 (Introduction to Programming)
+            <option value="11111111-1111-1111-1111-111111111111">
+              Lớp mẫu API: 11111111-1111-1111-1111-111111111111
             </option>
+            {lecturerSections.map(sec => (
+              <option key={sec.id} value={sec.id}>
+                {sec.sectionCode} - {sec.courseName || 'Lớp học phần'} ({sec.id.slice(0, 8)}...)
+              </option>
+            ))}
             {classes.map(c => (
               <option key={c.id} value={c.id}>
                 {c.code} - {c.name}
@@ -374,6 +739,72 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
             title="Tải lại từ API"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+
+          {/* Bộ chọn Chế độ hiển thị cột điểm theo đặc tả API */}
+          <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs gap-1 flex-wrap">
+            <button
+              onClick={handleLoadApiSamplePayload}
+              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                selectedPresetMode === 'api_sample'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Bộ dữ liệu chuẩn 200 OK theo đặc tả API: 2 cột (Giữa kỳ 30%, Cuối kỳ 70%, STU001)"
+            >
+              Mẫu 200 OK (2 cột)
+            </button>
+            <button
+              onClick={handleLoadFullGradebook}
+              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                selectedPresetMode === 'full'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Hiện đầy đủ tất cả 4 thành phần điểm (Chuyên cần 10%, Thực hành 20%, Giữa kỳ 30%, Cuối kỳ 40% = 100%)"
+            >
+              Đầy đủ 4 cột (100%)
+            </button>
+            <button
+              onClick={handleLoadEmptyStudents}
+              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                selectedPresetMode === 'empty_students'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Trường hợp lớp chưa có sinh viên: students = []"
+            >
+              Lớp chưa có SV
+            </button>
+            <button
+              onClick={handleLoadEmptyComponents}
+              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                selectedPresetMode === 'empty_components'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Trường hợp lớp chưa tạo cột điểm: components = []"
+            >
+              Chưa tạo cột điểm
+            </button>
+          </div>
+
+          <button
+            onClick={() => setShowAddComponentModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-blue-200 bg-blue-50/80 hover:bg-blue-100 text-blue-700 font-bold text-xs transition-colors cursor-pointer"
+            title="Thêm cột điểm thành phần mới vào bảng điểm"
+          >
+            <Plus className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">Thêm cột điểm</span>
+          </button>
+
+          <button
+            onClick={() => setShowJsonInspector(true)}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+            title="Xem Payload JSON trả về từ API"
+          >
+            <Code2 className="w-4 h-4 text-blue-600" />
+            <span className="hidden sm:inline">Payload JSON</span>
           </button>
 
           <button
@@ -401,7 +832,7 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
           <div className="flex-1">
             <input
               type="text"
-              placeholder="Nhập courseSectionId (UUID)..."
+              placeholder="Nhập courseSectionId (UUID) ví dụ: 11111111-1111-1111-1111-111111111111..."
               value={customSectionInput}
               onChange={e => setCustomSectionInput(e.target.value)}
               className="w-full px-3 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -427,11 +858,35 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
           </span>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-slate-400">
-          <span>Quyền:</span>
+          <span>Header:</span>
           <span className="px-2 py-0.5 rounded-md bg-slate-800 text-blue-300 font-mono font-semibold">
-            Bearer &lt;lecturerAccessToken&gt;
+            Authorization: Bearer &lt;lecturerAccessToken&gt;
           </span>
         </div>
+      </div>
+
+      {/* Info notice about frontend rules */}
+      <div className="px-4 py-3 bg-blue-50/70 border border-blue-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-blue-900">
+        <div className="flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+          <div className="leading-relaxed">
+            <strong>Quy tắc xử lý frontend:</strong> Cột điểm ghép bằng{' '}
+            <code className="px-1.5 py-0.5 bg-blue-100 rounded text-[11px] font-mono">
+              students[].grades[].gradeComponentId === components[].id
+            </code>
+            . Cột điểm được sắp theo <code className="px-1 py-0.5 bg-blue-100 rounded font-mono">name</code>, sinh viên sắp theo{' '}
+            <code className="px-1 py-0.5 bg-blue-100 rounded font-mono">studentCode</code>. Khi{' '}
+            <code className="px-1 py-0.5 bg-blue-100 rounded font-mono">score: null</code>, hiển thị ô trống hoặc nhãn{' '}
+            <span className="font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">Chưa có điểm</span>.
+          </div>
+        </div>
+        <button
+          onClick={handleToggleNullStudent}
+          className="self-start sm:self-center px-3 py-1.5 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-900 font-bold text-[11px] transition-colors cursor-pointer shrink-0 border border-blue-300/80"
+          title="Thử nghiệm sinh viên chưa có điểm (null) để kiểm tra giao diện hiển thị badge Chưa có điểm"
+        >
+          {localStudents.some(s => s.studentCode === 'STU002') ? 'Ẩn SV mẫu điểm null' : '+ Thử SV mẫu điểm null'}
+        </button>
       </div>
 
       {saveSuccessMessage && (
@@ -453,7 +908,7 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
           <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Sĩ số lớp</span>
           <div className="text-2xl font-black text-slate-800 mt-1">{stats.total}</div>
-          <span className="text-[10px] text-slate-400">Sinh viên chính quy</span>
+          <span className="text-[10px] text-slate-400">Sinh viên đã đăng ký</span>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
@@ -471,7 +926,9 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
-          <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Cấu trúc điểm ({sectionGrades.components?.length || 0} cột)</span>
+          <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
+            Cấu trúc điểm ({sectionGrades.components?.length || 0} cột)
+          </span>
           <div className="flex flex-wrap gap-1 mt-1.5">
             {sectionGrades.components && sectionGrades.components.length > 0 ? (
               sectionGrades.components.map(comp => (
@@ -540,143 +997,291 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50/80 text-slate-600 border-b border-slate-200/80">
-                  <th className="py-3 px-3 font-bold w-12 text-center">STT</th>
-                  <th className="py-3 px-4 font-bold w-28">Mã SV</th>
-                  <th className="py-3 px-4 font-bold min-w-[180px]">Họ và tên</th>
-                  <th className="py-3 px-3 font-bold text-center w-28">Trạng thái</th>
-
-                  {/* Dynamic Columns from API components */}
-                  {(sectionGrades.components || []).map(comp => (
-                    <th
-                      key={comp.id}
-                      className="py-3 px-3 font-bold text-center min-w-[120px] border-l border-slate-200/60 bg-blue-50/20"
-                    >
-                      <div className="text-slate-800">{comp.name}</div>
-                      <div className="text-[10px] text-blue-600 font-semibold">
-                        ({comp.weight}% • Thang {comp.maxScore})
-                      </div>
-                    </th>
-                  ))}
-
-                  <th className="py-3 px-4 font-bold text-center w-24 border-l border-slate-200 bg-slate-100/60">
-                    <div>Tổng kết</div>
-                    <div className="text-[10px] text-slate-500 font-normal">(Hệ 10)</div>
+                {/* Dòng 1: Phân nhóm cột học phần */}
+                <tr className="bg-slate-100/90 text-slate-700 font-bold border-b border-slate-200 text-center">
+                  <th rowSpan={2} className="py-3 px-3 w-12 text-center border-r border-slate-200">
+                    STT
                   </th>
-                  <th className="py-3 px-3 font-bold text-center w-20">Điểm chữ</th>
-                  <th className="py-3 px-4 font-bold text-center w-24">Kết quả</th>
+                  <th rowSpan={2} className="py-3 px-4 w-28 text-left border-r border-slate-200">
+                    Mã SV
+                  </th>
+                  <th rowSpan={2} className="py-3 px-4 min-w-[190px] text-left border-r border-slate-200">
+                    Họ và tên sinh viên
+                  </th>
+                  <th rowSpan={2} className="py-3 px-3 w-28 text-center border-r border-slate-200">
+                    Trạng thái ĐK
+                  </th>
+
+                  {/* NHÓM CỘT THÀNH PHẦN ĐIỂM DÀNH CHO TỪNG SINH VIÊN */}
+                  <th
+                    colSpan={sortedComponents.length > 0 ? sortedComponents.length : 1}
+                    className="py-2.5 px-3 bg-blue-100 text-blue-950 font-black uppercase tracking-wider text-[11px] border-r border-blue-200 text-center"
+                  >
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      <Layers className="w-3.5 h-3.5 text-blue-700" />
+                      <span>CÁC THÀNH PHẦN ĐIỂM HỌC PHẦN ({sortedComponents.length} cột)</span>
+                      <button
+                        onClick={() => setShowAddComponentModal(true)}
+                        className="px-2 py-0.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] flex items-center gap-1 shadow-xs cursor-pointer ml-1 transition-colors uppercase tracking-normal"
+                        title="Thêm cột thành phần điểm mới"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Thêm cột</span>
+                      </button>
+                    </div>
+                  </th>
+
+                  {/* NHÓM CỘT TỔNG KẾT & KẾT QUẢ */}
+                  <th
+                    colSpan={3}
+                    className="py-2.5 px-3 bg-emerald-100 text-emerald-950 font-black uppercase tracking-wider text-[11px] text-center"
+                  >
+                    <span>KẾT QUẢ ĐÁNH GIÁ TỔNG KẾT</span>
+                  </th>
+                </tr>
+
+                {/* Dòng 2: Chi tiết từng cột thành phần điểm và tổng kết */}
+                <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 text-xs">
+                  {/* Dynamic Columns from API components (sorted by name) */}
+                  {sortedComponents.length > 0 ? (
+                    sortedComponents.map((comp, cIdx) => (
+                      <th
+                        key={comp.id}
+                        className="py-2.5 px-3 font-bold text-center min-w-[130px] border-r border-slate-200/90 bg-blue-50/50 group relative"
+                      >
+                        <div className="text-slate-900 font-extrabold flex items-center justify-center gap-1.5">
+                          <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] flex items-center justify-center font-bold">
+                            {cIdx + 1}
+                          </span>
+                          <span>{comp.name}</span>
+                          {sortedComponents.length > 1 && (
+                            <button
+                              onClick={() => handleDeleteComponent(comp.id, comp.name)}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-rose-600 rounded transition-all cursor-pointer ml-0.5"
+                              title={`Xóa cột ${comp.name}`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-blue-700 font-semibold mt-0.5">
+                          Trọng số: <strong className="text-blue-900 font-extrabold">{comp.weight}%</strong> • Thang {comp.maxScore}
+                        </div>
+                      </th>
+                    ))
+                  ) : (
+                    <th className="py-2.5 px-3 font-semibold text-center text-slate-400 italic bg-slate-50 border-r border-slate-200 min-w-[180px]">
+                      Chưa có cột điểm nào (components: [])
+                    </th>
+                  )}
+
+                  <th className="py-2.5 px-4 font-bold text-center w-28 border-r border-slate-200 bg-slate-100/70">
+                    <div className="text-slate-800">Tổng kết</div>
+                    <div className="text-[10px] text-slate-500 font-normal">Hệ 10</div>
+                  </th>
+                  <th className="py-2.5 px-3 font-bold text-center w-20 border-r border-slate-200 bg-slate-100/70">
+                    <div className="text-slate-800">Điểm chữ</div>
+                    <div className="text-[10px] text-slate-500 font-normal">Quy đổi</div>
+                  </th>
+                  <th className="py-2.5 px-4 font-bold text-center w-28 bg-slate-100/70">
+                    <div className="text-slate-800">Kết quả</div>
+                    <div className="text-[10px] text-slate-500 font-normal">Xếp loại</div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredStudents.map((st, idx) => {
-                  const { total, letter, status, hasAnyScore } = calculateStudentTotal(st)
-                  const comps = sectionGrades.components || []
+                {sortedStudents.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={4 + (sortedComponents.length > 0 ? sortedComponents.length : 1) + 3}
+                      className="py-12 px-4 text-center text-slate-400 bg-slate-50/50"
+                    >
+                      <FileSpreadsheet className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                      <p className="font-bold text-sm text-slate-700">Lớp học phần chưa có sinh viên</p>
+                      <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                        {searchStudent.trim()
+                          ? `Không tìm thấy sinh viên nào khớp với từ khóa "${searchStudent}".`
+                          : 'Danh sách sinh viên đang rỗng (students: []). Chưa có sinh viên nào đăng ký vào lớp học phần này.'}
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  sortedStudents.map((st, idx) => {
+                    const {
+                      total,
+                      normalizedScore,
+                      letter,
+                      status,
+                      hasAnyScore,
+                      totalWeight
+                    } = calculateStudentTotal(st)
+                    const comps = sortedComponents
+                    const currentGrades = st.grades || []
 
-                  return (
-                    <tr key={st.enrollmentId || st.studentId} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3 text-center font-medium text-slate-400">
-                        {(page - 1) * pageSize + idx + 1}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-700">
-                        {st.studentCode}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0">
-                            {st.fullName.charAt(0)}
+                    return (
+                      <tr key={st.enrollmentId || st.studentId} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-3 text-center font-medium text-slate-400 border-r border-slate-100">
+                          {(page - 1) * pageSize + idx + 1}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-700 border-r border-slate-100">
+                          {st.studentCode}
+                        </td>
+                        <td className="py-3 px-4 border-r border-slate-100">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0">
+                              {st.fullName ? st.fullName.charAt(0) : '?'}
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-800 block">{st.fullName}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                MSSV: {st.studentCode}
+                              </span>
+                            </div>
                           </div>
-                          <span className="font-bold text-slate-800">{st.fullName}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                          {st.enrollmentStatus === 'Registered' ? 'Đã đăng ký' : st.enrollmentStatus}
-                        </span>
-                      </td>
+                        </td>
+                        <td className="py-3 px-3 text-center border-r border-slate-100">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                            {st.enrollmentStatus === 'Registered' ? 'Đã đăng ký' : st.enrollmentStatus}
+                          </span>
+                        </td>
 
-                      {/* Dynamic Component Score Inputs */}
-                      {comps.map(comp => {
-                        const gradeItem = st.grades.find(g => g.gradeComponentId === comp.id)
-                        const scoreVal = gradeItem?.score !== null && gradeItem?.score !== undefined ? gradeItem.score : ''
-
-                        return (
-                          <td
-                            key={comp.id}
-                            className="py-2 px-2 text-center border-l border-slate-100"
-                          >
-                            <input
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              max={comp.maxScore || 10}
-                              value={scoreVal}
-                              placeholder="-"
-                              onChange={e =>
-                                handleScoreChange(st.enrollmentId, comp.id, e.target.value)
-                              }
-                              className="w-16 mx-auto text-center py-1 bg-slate-50 focus:bg-white border border-slate-200 focus:border-blue-500 rounded-lg font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
+                        {/* Các cột thành phần điểm tương ứng của từng sinh viên */}
+                        {comps.length === 0 ? (
+                          <td className="py-3 px-4 text-center text-slate-400 italic border-r border-slate-100 bg-slate-50/30 text-[11px]">
+                            Chưa có cột điểm
                           </td>
-                        )
-                      })}
+                        ) : (
+                          comps.map(comp => {
+                            const gradeItem = currentGrades.find(
+                              g =>
+                                (g.gradeComponentId || '').toLowerCase() ===
+                                (comp.id || '').toLowerCase()
+                            )
+                            const hasScore =
+                              gradeItem &&
+                              typeof gradeItem.score === 'number' &&
+                              gradeItem.score !== null
+                            const scoreVal: number | string =
+                              hasScore && gradeItem && gradeItem.score !== null ? gradeItem.score : ''
 
-                      {/* Total Score */}
-                      <td className="py-3 px-4 text-center border-l border-slate-200 bg-slate-50/40">
-                        {hasAnyScore ? (
+                            return (
+                              <td
+                                key={comp.id}
+                                className="py-2.5 px-3 text-center border-r border-slate-100 bg-blue-50/15"
+                              >
+                                <div className="inline-flex flex-col items-center justify-center">
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    max={comp.maxScore || 10}
+                                    value={scoreVal}
+                                    placeholder="Chưa có điểm"
+                                    onChange={e =>
+                                      handleScoreChange(st.enrollmentId, comp.id, e.target.value)
+                                    }
+                                    className={`w-28 text-center py-1.5 px-2 rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                                      hasScore
+                                        ? 'bg-blue-50 text-blue-900 border border-blue-300 shadow-xs'
+                                        : 'bg-slate-50 text-slate-400 border border-dashed border-slate-300 placeholder-slate-400'
+                                    }`}
+                                    title={
+                                      hasScore
+                                        ? `Cột: ${comp.name} (${comp.weight}%)\nĐiểm: ${scoreVal} / ${comp.maxScore}\nGradeId: ${gradeItem?.gradeId || 'null'}${
+                                            gradeItem?.gradedAtUtc
+                                              ? `\nChấm lúc: ${new Date(gradeItem.gradedAtUtc).toLocaleString('vi-VN')}`
+                                              : ''
+                                          }`
+                                        : `Cột ${comp.name}: Chưa có điểm (score: null, gradeId: null)`
+                                    }
+                                  />
+                                  {hasScore ? (
+                                    <span className="text-[9px] text-blue-700 font-semibold mt-0.5">
+                                      {scoreVal} / {comp.maxScore}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80 font-medium mt-0.5">
+                                      Chưa có điểm
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            )
+                          })
+                        )}
+
+                        {/* Total Score */}
+                        <td className="py-3 px-4 text-center border-l border-slate-200 bg-slate-50/40">
+                          {hasAnyScore ? (
+                            <div className="inline-flex flex-col items-center">
+                              <span
+                                className={`font-black text-sm px-2.5 py-1 rounded-md border ${
+                                  (totalWeight === 100 ? total : normalizedScore) >= 8.0
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : (totalWeight === 100 ? total : normalizedScore) >= 5.0
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                                }`}
+                              >
+                                {totalWeight === 100 ? total : normalizedScore}
+                              </span>
+                              {totalWeight < 100 && (
+                                <span
+                                  className="text-[9px] text-slate-500 font-medium mt-0.5"
+                                  title={`Hệ số tích lũy: ${total} / ${(totalWeight / 10).toFixed(1)}`}
+                                >
+                                  Tích lũy {total}/{(totalWeight / 10).toFixed(1)}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic font-mono">-</span>
+                          )}
+                        </td>
+
+                        {/* Letter Grade */}
+                        <td className="py-3 px-3 text-center">
                           <span
-                            className={`font-black text-sm px-2.5 py-1 rounded-md border ${
-                              total >= 8.0
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : total >= 5.0
-                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                            className={`font-black text-xs px-2 py-0.5 rounded-md ${
+                              letter.startsWith('A')
+                                ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                                : letter.startsWith('B')
+                                ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                                : letter.startsWith('C')
+                                ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                                : letter === '-'
+                                ? 'text-slate-400'
+                                : 'bg-rose-50 text-rose-600 border border-rose-200'
                             }`}
                           >
-                            {total}
+                            {letter}
                           </span>
-                        ) : (
-                          <span className="text-slate-400 italic">-</span>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Letter Grade */}
-                      <td className="py-3 px-3 text-center">
-                        <span
-                          className={`font-black text-xs px-2 py-0.5 rounded-md ${
-                            letter.startsWith('A')
-                              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                              : letter.startsWith('B')
-                              ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                              : letter.startsWith('C')
-                              ? 'bg-amber-50 text-amber-600 border border-amber-200'
-                              : letter === '-'
-                              ? 'text-slate-400'
-                              : 'bg-rose-50 text-rose-600 border border-rose-200'
-                          }`}
-                        >
-                          {letter}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`px-2 py-0.5 text-[11px] font-semibold rounded-md ${
-                            status === 'Đạt'
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : status === 'Cảnh báo'
-                              ? 'bg-amber-50 text-amber-700'
-                              : status === 'Không đạt'
-                              ? 'bg-rose-50 text-rose-700'
-                              : 'bg-slate-50 text-slate-500'
-                          }`}
-                        >
-                          {status}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
+                        {/* Status */}
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`px-2 py-0.5 text-[11px] font-semibold rounded-md ${
+                              status === 'Đạt'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : status === 'Cảnh báo'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : status === 'Không đạt'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : status === 'Chưa hoàn tất'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : 'bg-slate-50 text-slate-500 border border-slate-200'
+                            }`}
+                          >
+                            {status === 'Chưa hoàn tất' && totalWeight < 100
+                              ? `Chưa hoàn tất (${totalWeight}%)`
+                              : status}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -684,8 +1289,28 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
 
         {/* Pagination Bar */}
         <div className="p-4 bg-slate-50/80 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div>
-            Hiển thị <strong>{filteredStudents.length}</strong> / <strong>{totalCount}</strong> sinh viên
+          <div className="flex items-center gap-3">
+            <span>
+              Hiển thị <strong>{sortedStudents.length}</strong> / <strong>{totalCount}</strong> sinh viên
+            </span>
+            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+              <span className="text-slate-400">Số dòng:</span>
+              <select
+                value={pageSize}
+                onChange={e => {
+                  const newSize = Number(e.target.value)
+                  setPageSize(newSize)
+                  setPage(1)
+                  fetchGrades(selectedSectionId, 1, newSize)
+                }}
+                className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer focus:outline-none"
+              >
+                <option value={10}>10 / trang</option>
+                <option value={20}>20 / trang (Mặc định)</option>
+                <option value={50}>50 / trang</option>
+                <option value={100}>100 / trang</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -711,6 +1336,173 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* JSON Inspector Modal */}
+      {showJsonInspector && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className="flex items-center gap-2.5">
+                <Code2 className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-white">API Response Payload Inspector</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    GET /api/course-sections/{selectedSectionId}/grades?page={page}&pageSize={pageSize}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyJson}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors cursor-pointer border border-slate-700"
+                >
+                  {copiedJson ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-400">Đã sao chép</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Sao chép JSON</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowJsonInspector(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-950/60 border-b border-slate-800 text-xs text-slate-400 flex items-center gap-2">
+              <Info className="w-4 h-4 text-blue-400 shrink-0" />
+              <span>
+                Cấu trúc payload chuẩn: Khi sinh viên chưa có điểm ở thành phần, <code>gradeId</code>, <code>score</code>, <code>gradedAtUtc</code>, <code>updatedAtUtc</code> là <code>null</code>.
+              </span>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1 font-mono text-xs text-slate-300 bg-slate-950">
+              <pre className="whitespace-pre-wrap leading-relaxed text-emerald-400/90 selection:bg-emerald-500 selection:text-slate-950">
+                {JSON.stringify(
+                  rawApiResponse || {
+                    success: true,
+                    message: 'Success',
+                    data: {
+                      ...sectionGrades,
+                      students: localStudents
+                    }
+                  },
+                  null,
+                  2
+                )}
+              </pre>
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-800 bg-slate-900/90 flex justify-end">
+              <button
+                onClick={() => setShowJsonInspector(false)}
+                className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Thêm cột thành phần điểm mới */}
+      {showAddComponentModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-bold text-slate-800">Thêm Cột Thành Phần Điểm</h3>
+              </div>
+              <button
+                onClick={() => setShowAddComponentModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddComponentSubmit} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Tên thành phần điểm <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: Chuyên cần, Bài tập lớn, Thuyết trình, Tiểu luận..."
+                  value={newCompName}
+                  onChange={e => setNewCompName(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Trọng số (%) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    placeholder="20"
+                    value={newCompWeight}
+                    onChange={e => setNewCompWeight(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Thang điểm tối đa <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    placeholder="10"
+                    value={newCompMaxScore}
+                    onChange={e => setNewCompMaxScore(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-blue-50/60 rounded-xl text-[11px] text-blue-700 leading-relaxed border border-blue-100">
+                Cột điểm mới sẽ được thêm vào bảng điểm của học phần và tự động tạo ô nhập điểm cho toàn bộ sinh viên trong danh sách.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddComponentModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white shadow-xs cursor-pointer"
+                >
+                  Tạo cột điểm
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

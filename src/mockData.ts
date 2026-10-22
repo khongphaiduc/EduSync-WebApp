@@ -709,19 +709,20 @@ export const DEMO_SESSION_ATTENDANCE: SessionAttendanceItem[] = [
   }
 ]
 
+// 1. Bộ Payload mẫu chính xác theo đặc tả API GET /api/course-sections/11111111-1111-1111-1111-111111111111/grades (200 OK)
 export const DEMO_SECTION_GRADES: CourseSectionGradesData = {
-  courseSectionId: '22222222-2222-2222-2222-222222222222',
+  courseSectionId: '11111111-1111-1111-1111-111111111111',
   components: [
     {
-      id: '11111111-1111-1111-1111-111111111111',
-      courseSectionId: '22222222-2222-2222-2222-222222222222',
+      id: '22222222-2222-2222-2222-222222222222',
+      courseSectionId: '11111111-1111-1111-1111-111111111111',
       name: 'Giữa kỳ',
       weight: 30,
       maxScore: 10
     },
     {
       id: '33333333-3333-3333-3333-333333333333',
-      courseSectionId: '22222222-2222-2222-2222-222222222222',
+      courseSectionId: '11111111-1111-1111-1111-111111111111',
       name: 'Cuối kỳ',
       weight: 70,
       maxScore: 10
@@ -736,57 +737,11 @@ export const DEMO_SECTION_GRADES: CourseSectionGradesData = {
       enrollmentStatus: 'Registered',
       grades: [
         {
-          gradeComponentId: '11111111-1111-1111-1111-111111111111',
+          gradeComponentId: '22222222-2222-2222-2222-222222222222',
           gradeId: '66666666-6666-6666-6666-666666666666',
           score: 8.5,
-          gradedAtUtc: '2026-10-20T03:00:00Z',
-          updatedAtUtc: null
-        },
-        {
-          gradeComponentId: '33333333-3333-3333-3333-333333333333',
-          gradeId: null,
-          score: null,
-          gradedAtUtc: null,
-          updatedAtUtc: null
-        }
-      ]
-    },
-    {
-      enrollmentId: '55555555-5555-5555-5555-555555555555',
-      studentId: '66666666-6666-6666-6666-666666666666',
-      studentCode: 'STU002',
-      fullName: 'Tran Thi B',
-      enrollmentStatus: 'Registered',
-      grades: [
-        {
-          gradeComponentId: '11111111-1111-1111-1111-111111111111',
-          gradeId: '77777777-7777-7777-7777-777777777777',
-          score: 9.0,
-          gradedAtUtc: '2026-10-20T03:00:00Z',
-          updatedAtUtc: null
-        },
-        {
-          gradeComponentId: '33333333-3333-3333-3333-333333333333',
-          gradeId: '88888888-8888-8888-8888-888888888888',
-          score: 8.0,
-          gradedAtUtc: '2026-10-20T03:00:00Z',
-          updatedAtUtc: null
-        }
-      ]
-    },
-    {
-      enrollmentId: '77777777-7777-7777-7777-777777777777',
-      studentId: '88888888-8888-8888-8888-888888888888',
-      studentCode: 'STU003',
-      fullName: 'Le Quang Huy',
-      enrollmentStatus: 'Registered',
-      grades: [
-        {
-          gradeComponentId: '11111111-1111-1111-1111-111111111111',
-          gradeId: '99999999-9999-9999-9999-999999999999',
-          score: 7.0,
-          gradedAtUtc: '2026-10-20T03:00:00Z',
-          updatedAtUtc: null
+          gradedAtUtc: '2026-10-20T08:00:00Z',
+          updatedAtUtc: '2026-10-20T08:00:00Z'
         },
         {
           gradeComponentId: '33333333-3333-3333-3333-333333333333',
@@ -800,6 +755,281 @@ export const DEMO_SECTION_GRADES: CourseSectionGradesData = {
   ],
   page: 1,
   pageSize: 20,
-  totalCount: 3
+  totalCount: 1
 }
+
+// 2. Bộ bảng điểm mẫu mở rộng đầy đủ các thành phần điểm (Chuyên cần 10%, Thực hành 20%, Giữa kỳ 30%, Cuối kỳ 40% = 100%)
+export const FULL_SAMPLE_SECTION_GRADES: CourseSectionGradesData = {
+  courseSectionId: '11111111-1111-1111-1111-111111111111',
+  components: [
+    {
+      id: '11111111-2222-3333-4444-555555555501',
+      courseSectionId: '11111111-1111-1111-1111-111111111111',
+      name: 'Chuyên cần',
+      weight: 10,
+      maxScore: 10
+    },
+    {
+      id: '11111111-2222-3333-4444-555555555502',
+      courseSectionId: '11111111-1111-1111-1111-111111111111',
+      name: 'Thực hành / Bài tập',
+      weight: 20,
+      maxScore: 10
+    },
+    {
+      id: '22222222-2222-2222-2222-222222222222',
+      courseSectionId: '11111111-1111-1111-1111-111111111111',
+      name: 'Giữa kỳ',
+      weight: 30,
+      maxScore: 10
+    },
+    {
+      id: '11111111-2222-3333-4444-555555555504',
+      courseSectionId: '11111111-1111-1111-1111-111111111111',
+      name: 'Thi cuối kỳ',
+      weight: 40,
+      maxScore: 10
+    }
+  ],
+  students: [
+    {
+      enrollmentId: '33333333-3333-3333-3333-333333333333',
+      studentId: '44444444-4444-4444-4444-444444444444',
+      studentCode: 'STU001',
+      fullName: 'Nguyễn Văn A',
+      enrollmentStatus: 'Registered',
+      grades: [
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555501',
+          gradeId: '55555555-5555-5555-5555-555555555501',
+          score: 10.0,
+          gradedAtUtc: '2026-10-21T07:30:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555502',
+          gradeId: '55555555-5555-5555-5555-555555555502',
+          score: 8.5,
+          gradedAtUtc: '2026-10-21T07:45:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '22222222-2222-2222-2222-222222222222',
+          gradeId: '55555555-5555-5555-5555-555555555555',
+          score: 8.5,
+          gradedAtUtc: '2026-10-21T08:00:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555504',
+          gradeId: '55555555-5555-5555-5555-555555555504',
+          score: 9.0,
+          gradedAtUtc: '2026-10-21T09:00:00Z',
+          updatedAtUtc: null
+        }
+      ]
+    },
+    {
+      enrollmentId: '33333333-3333-3333-3333-333333333334',
+      studentId: '44444444-4444-4444-4444-444444444445',
+      studentCode: 'STU002',
+      fullName: 'Trần Thị B',
+      enrollmentStatus: 'Registered',
+      grades: [
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555501',
+          gradeId: '55555555-5555-5555-5555-555555555505',
+          score: 9.0,
+          gradedAtUtc: '2026-10-21T07:30:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555502',
+          gradeId: '55555555-5555-5555-5555-555555555506',
+          score: 7.5,
+          gradedAtUtc: '2026-10-21T07:45:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '22222222-2222-2222-2222-222222222222',
+          gradeId: '55555555-5555-5555-5555-555555555507',
+          score: 8.0,
+          gradedAtUtc: '2026-10-21T08:00:00Z',
+          updatedAtUtc: null
+        },
+        {
+          // Điểm cuối kỳ chưa có (null) để kiểm tra quy tắc giá trị null
+          gradeComponentId: '11111111-2222-3333-4444-555555555504',
+          gradeId: null,
+          score: null,
+          gradedAtUtc: null,
+          updatedAtUtc: null
+        }
+      ]
+    },
+    {
+      enrollmentId: '33333333-3333-3333-3333-333333333335',
+      studentId: '44444444-4444-4444-4444-444444444446',
+      studentCode: 'STU003',
+      fullName: 'Lê Quang Huy',
+      enrollmentStatus: 'Registered',
+      grades: [
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555501',
+          gradeId: '55555555-5555-5555-5555-555555555508',
+          score: 8.5,
+          gradedAtUtc: '2026-10-21T07:30:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555502',
+          gradeId: '55555555-5555-5555-5555-555555555509',
+          score: 7.0,
+          gradedAtUtc: '2026-10-21T07:45:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '22222222-2222-2222-2222-222222222222',
+          gradeId: '55555555-5555-5555-5555-555555555510',
+          score: 7.0,
+          gradedAtUtc: '2026-10-21T08:00:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555504',
+          gradeId: '55555555-5555-5555-5555-555555555511',
+          score: 7.5,
+          gradedAtUtc: '2026-10-21T09:00:00Z',
+          updatedAtUtc: null
+        }
+      ]
+    },
+    {
+      enrollmentId: '33333333-3333-3333-3333-333333333336',
+      studentId: '44444444-4444-4444-4444-444444444447',
+      studentCode: 'STU004',
+      fullName: 'Phạm Minh Anh',
+      enrollmentStatus: 'Registered',
+      grades: [
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555501',
+          gradeId: '55555555-5555-5555-5555-555555555512',
+          score: 10.0,
+          gradedAtUtc: '2026-10-21T07:30:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555502',
+          gradeId: '55555555-5555-5555-5555-555555555513',
+          score: 9.5,
+          gradedAtUtc: '2026-10-21T07:45:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '22222222-2222-2222-2222-222222222222',
+          gradeId: '55555555-5555-5555-5555-555555555514',
+          score: 9.0,
+          gradedAtUtc: '2026-10-21T08:00:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555504',
+          gradeId: '55555555-5555-5555-5555-555555555515',
+          score: 9.5,
+          gradedAtUtc: '2026-10-21T09:00:00Z',
+          updatedAtUtc: null
+        }
+      ]
+    },
+    {
+      enrollmentId: '33333333-3333-3333-3333-333333333337',
+      studentId: '44444444-4444-4444-4444-444444444448',
+      studentCode: 'STU005',
+      fullName: 'Vũ Hoàng Long',
+      enrollmentStatus: 'Registered',
+      grades: [
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555501',
+          gradeId: '55555555-5555-5555-5555-555555555516',
+          score: 7.0,
+          gradedAtUtc: '2026-10-21T07:30:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555502',
+          gradeId: '55555555-5555-5555-5555-555555555517',
+          score: 5.0,
+          gradedAtUtc: '2026-10-21T07:45:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '22222222-2222-2222-2222-222222222222',
+          gradeId: '55555555-5555-5555-5555-555555555518',
+          score: 5.5,
+          gradedAtUtc: '2026-10-21T08:00:00Z',
+          updatedAtUtc: null
+        },
+        {
+          gradeComponentId: '11111111-2222-3333-4444-555555555504',
+          gradeId: '55555555-5555-5555-5555-555555555519',
+          score: 4.5,
+          gradedAtUtc: '2026-10-21T09:00:00Z',
+          updatedAtUtc: null
+        }
+      ]
+    }
+  ],
+  page: 1,
+  pageSize: 20,
+  totalCount: 5
+}
+export const MINIMAL_SAMPLE_PAYLOAD_GRADES = DEMO_SECTION_GRADES
+
+// Trường hợp lớp chưa có sinh viên đăng ký: students là []
+export const EMPTY_STUDENTS_SECTION_GRADES: CourseSectionGradesData = {
+  courseSectionId: '11111111-1111-1111-1111-111111111111',
+  components: [
+    {
+      id: '22222222-2222-2222-2222-222222222222',
+      courseSectionId: '11111111-1111-1111-1111-111111111111',
+      name: 'Giữa kỳ',
+      weight: 30,
+      maxScore: 10
+    },
+    {
+      id: '33333333-3333-3333-3333-333333333333',
+      courseSectionId: '11111111-1111-1111-1111-111111111111',
+      name: 'Cuối kỳ',
+      weight: 70,
+      maxScore: 10
+    }
+  ],
+  students: [],
+  page: 1,
+  pageSize: 20,
+  totalCount: 0
+}
+
+// Trường hợp lớp chưa tạo cột điểm thành phần: components là []
+export const EMPTY_COMPONENTS_SECTION_GRADES: CourseSectionGradesData = {
+  courseSectionId: '11111111-1111-1111-1111-111111111111',
+  components: [],
+  students: [
+    {
+      enrollmentId: '44444444-4444-4444-4444-444444444444',
+      studentId: '55555555-5555-5555-5555-555555555555',
+      studentCode: 'STU001',
+      fullName: 'Nguyen Van A',
+      enrollmentStatus: 'Registered',
+      grades: []
+    }
+  ],
+  page: 1,
+  pageSize: 20,
+  totalCount: 1
+}
+
+
+
+
 

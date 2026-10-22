@@ -44,7 +44,12 @@ import {
   getGradeComponentsUrl,
   getCourseSectionGradesUrl
 } from '../../config'
-import { DEMO_SECTION_GRADES } from '../../mockData'
+import {
+  DEMO_SECTION_GRADES,
+  FULL_SAMPLE_SECTION_GRADES,
+  EMPTY_STUDENTS_SECTION_GRADES,
+  EMPTY_COMPONENTS_SECTION_GRADES
+} from '../../mockData'
 
 export const AdminSectionsView: React.FC = () => {
   // Danh sách lớp học phần lấy từ API GET /api/course-sections
@@ -121,6 +126,9 @@ export const AdminSectionsView: React.FC = () => {
   // Modal xem bảng điểm lớp học phần (GET /api/course-sections/{sectionId}/grades)
   const [viewingGradesSection, setViewingGradesSection] = useState<ApiCourseSectionItem | null>(null)
   const [gradesData, setGradesData] = useState<CourseSectionGradesData | null>(null)
+  const [gradesPresetMode, setGradesPresetMode] = useState<
+    'api_sample' | 'full' | 'empty_students' | 'empty_components'
+  >('api_sample')
   const [gradesPage, setGradesPage] = useState<number>(1)
   const [gradesPageSize, setGradesPageSize] = useState<number>(20)
   const [isLoadingGrades, setIsLoadingGrades] = useState<boolean>(false)
@@ -361,23 +369,83 @@ export const AdminSectionsView: React.FC = () => {
             setGradesPageSize(json.data.pageSize || targetPageSize)
             return
           }
+        } else {
+          // Xử lý các lỗi thường gặp theo đặc tả API:
+          // 400: Tham số không hợp lệ
+          // 401: Thiếu hoặc sai token
+          // 403: Không có quyền hoặc giảng viên không được phân công
+          // 404: Lớp học phần không tồn tại
+          const errJson = await response.json().catch(() => null)
+          let errorMsg = ''
+          if (response.status === 400) {
+            errorMsg = errJson?.message || 'Lỗi 400 (Bad Request): Tham số truy vấn không hợp lệ.'
+          } else if (response.status === 401) {
+            errorMsg = errJson?.message || 'Lỗi 401 (Unauthorized): Thiếu hoặc sai Access Token.'
+          } else if (response.status === 403) {
+            errorMsg = errJson?.message || 'Lỗi 403 (Forbidden): Bạn không có quyền truy cập bảng điểm lớp này.'
+          } else if (response.status === 404) {
+            errorMsg = errJson?.message || `Lỗi 404 (Not Found): Lớp học phần với ID "${sectionId}" không tồn tại.`
+          } else {
+            errorMsg = errJson?.message || `Lỗi máy chủ (${response.status}): Không thể tải bảng điểm.`
+          }
+          setGradesError(errorMsg)
         }
+
         // Fallback to demo grades
+        const baseData =
+          gradesPresetMode === 'full'
+            ? FULL_SAMPLE_SECTION_GRADES
+            : gradesPresetMode === 'empty_students'
+            ? EMPTY_STUDENTS_SECTION_GRADES
+            : gradesPresetMode === 'empty_components'
+            ? EMPTY_COMPONENTS_SECTION_GRADES
+            : DEMO_SECTION_GRADES
+
         setGradesData({
-          ...DEMO_SECTION_GRADES,
+          ...baseData,
           courseSectionId: sectionId
         })
       } catch {
+        const baseData =
+          gradesPresetMode === 'full'
+            ? FULL_SAMPLE_SECTION_GRADES
+            : gradesPresetMode === 'empty_students'
+            ? EMPTY_STUDENTS_SECTION_GRADES
+            : gradesPresetMode === 'empty_components'
+            ? EMPTY_COMPONENTS_SECTION_GRADES
+            : DEMO_SECTION_GRADES
+
         setGradesData({
-          ...DEMO_SECTION_GRADES,
+          ...baseData,
           courseSectionId: sectionId
         })
       } finally {
         setIsLoadingGrades(false)
       }
     },
-    []
+    [gradesPresetMode]
   )
+
+  const handleSwitchAdminGradesPreset = (
+    mode: 'api_sample' | 'full' | 'empty_students' | 'empty_components'
+  ) => {
+    setGradesPresetMode(mode)
+    const baseData =
+      mode === 'full'
+        ? FULL_SAMPLE_SECTION_GRADES
+        : mode === 'empty_students'
+        ? EMPTY_STUDENTS_SECTION_GRADES
+        : mode === 'empty_components'
+        ? EMPTY_COMPONENTS_SECTION_GRADES
+        : DEMO_SECTION_GRADES
+
+    if (viewingGradesSection) {
+      setGradesData({
+        ...baseData,
+        courseSectionId: viewingGradesSection.id
+      })
+    }
+  }
 
   const handleOpenGradesModal = (sec: ApiCourseSectionItem) => {
     setViewingGradesSection(sec)
@@ -399,24 +467,32 @@ export const AdminSectionsView: React.FC = () => {
     fetchSectionGrades(viewingGradesSection.id, 1, newSize)
   }
 
-  // Lọc tìm kiếm sinh viên trong bảng điểm
-  const filteredGradesStudents = useMemo(() => {
-    if (!gradesData?.students) return []
-    if (!gradesSearch.trim()) return gradesData.students
-    const q = gradesSearch.toLowerCase().trim()
-    return gradesData.students.filter(
-      st =>
-        (st.studentCode && st.studentCode.toLowerCase().includes(q)) ||
-        (st.fullName && st.fullName.toLowerCase().includes(q))
+  // Theo đặc tả API: Cột điểm sắp theo name
+  const sortedAdminComponents = useMemo(() => {
+    return [...(gradesData?.components || [])].sort((a, b) =>
+      (a.name || '').localeCompare(b.name || '', 'vi')
     )
-  }, [gradesData, gradesSearch])
+  }, [gradesData?.components])
+
+  // Lọc và sắp xếp sinh viên theo studentCode theo đặc tả API
+  const sortedAdminGradesStudents = useMemo(() => {
+    if (!gradesData?.students) return []
+    const list = !gradesSearch.trim()
+      ? gradesData.students
+      : gradesData.students.filter(
+          st =>
+            (st.studentCode && st.studentCode.toLowerCase().includes(gradesSearch.toLowerCase().trim())) ||
+            (st.fullName && st.fullName.toLowerCase().includes(gradesSearch.toLowerCase().trim()))
+        )
+    return [...list].sort((a, b) => (a.studentCode || '').localeCompare(b.studentCode || ''))
+  }, [gradesData?.students, gradesSearch])
 
   // Thống kê điểm học phần
   const gradesStats = useMemo(() => {
     if (!gradesData || !gradesData.students.length) {
       return { totalStudents: 0, avgScore: '0.00', passRate: 0, passedCount: 0 }
     }
-    const comps = gradesData.components || []
+    const comps = sortedAdminComponents
     let totalScoreSum = 0
     let gradedCount = 0
     let passedCount = 0
@@ -424,9 +500,12 @@ export const AdminSectionsView: React.FC = () => {
     gradesData.students.forEach(st => {
       let stScore = 0
       let hasScore = false
+      const stGrades = st.grades || []
       comps.forEach(c => {
-        const g = st.grades.find(item => item.gradeComponentId === c.id)
-        if (g && typeof g.score === 'number') {
+        const g = stGrades.find(
+          item => (item.gradeComponentId || '').toLowerCase() === (c.id || '').toLowerCase()
+        )
+        if (g && typeof g.score === 'number' && g.score !== null) {
           hasScore = true
           stScore += (g.score / (c.maxScore || 10)) * 10 * (c.weight / 100)
         }
@@ -449,7 +528,7 @@ export const AdminSectionsView: React.FC = () => {
       passRate,
       passedCount
     }
-  }, [gradesData])
+  }, [gradesData, sortedAdminComponents])
 
   // Xuất file CSV bảng điểm
   const handleExportGradesCsv = () => {
@@ -468,9 +547,12 @@ export const AdminSectionsView: React.FC = () => {
 
     const rows = gradesData.students.map((st, idx) => {
       let total = 0
+      const stGrades = st.grades || []
       const compScores = comps.map(c => {
-        const g = st.grades.find(item => item.gradeComponentId === c.id)
-        if (g && typeof g.score === 'number') {
+        const g = stGrades.find(
+          item => (item.gradeComponentId || '').toLowerCase() === (c.id || '').toLowerCase()
+        )
+        if (g && typeof g.score === 'number' && g.score !== null) {
           total += (g.score / (c.maxScore || 10)) * 10 * (c.weight / 100)
           return g.score
         }
@@ -2043,6 +2125,58 @@ export const AdminSectionsView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2 self-end sm:self-auto">
+                {/* Bộ chọn Chế độ hiển thị cột điểm */}
+                <div className="inline-flex rounded-xl bg-emerald-100/60 p-1 border border-emerald-200 text-xs flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchAdminGradesPreset('api_sample')}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      gradesPresetMode === 'api_sample'
+                        ? 'bg-white text-emerald-800 shadow-xs'
+                        : 'text-emerald-700 hover:text-emerald-950'
+                    }`}
+                    title="Hiện mẫu API chuẩn 200 OK: 2 cột (Giữa kỳ 30%, Cuối kỳ 70%)"
+                  >
+                    Mẫu 200 OK (2 cột)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchAdminGradesPreset('full')}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      gradesPresetMode === 'full'
+                        ? 'bg-white text-emerald-800 shadow-xs'
+                        : 'text-emerald-700 hover:text-emerald-950'
+                    }`}
+                    title="Hiện đầy đủ tất cả 4 thành phần điểm (Chuyên cần 10%, Thực hành 20%, Giữa kỳ 30%, Cuối kỳ 40% = 100%)"
+                  >
+                    Đầy đủ 4 cột (100%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchAdminGradesPreset('empty_students')}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      gradesPresetMode === 'empty_students'
+                        ? 'bg-white text-emerald-800 shadow-xs'
+                        : 'text-emerald-700 hover:text-emerald-950'
+                    }`}
+                    title="Trường hợp lớp chưa có sinh viên: students = []"
+                  >
+                    Lớp chưa có SV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchAdminGradesPreset('empty_components')}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      gradesPresetMode === 'empty_components'
+                        ? 'bg-white text-emerald-800 shadow-xs'
+                        : 'text-emerald-700 hover:text-emerald-950'
+                    }`}
+                    title="Trường hợp lớp chưa tạo cột điểm: components = []"
+                  >
+                    Chưa tạo cột điểm
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => fetchSectionGrades(viewingGradesSection.id, gradesPage, gradesPageSize)}
@@ -2183,18 +2317,24 @@ export const AdminSectionsView: React.FC = () => {
                           <th className="py-3 px-4 font-bold min-w-[170px]">Họ và tên</th>
                           <th className="py-3 px-3 font-bold text-center w-28">Trạng thái</th>
 
-                          {/* Dynamic Grade Components Columns */}
-                          {(gradesData.components || []).map(comp => (
-                            <th
-                              key={comp.id}
-                              className="py-3 px-3 font-bold text-center min-w-[105px] border-l border-slate-200/60 bg-emerald-50/20"
-                            >
-                              <div className="text-slate-800">{comp.name}</div>
-                              <div className="text-[10px] text-emerald-700 font-semibold">
-                                {comp.weight}% • Tối đa {comp.maxScore}
-                              </div>
+                          {/* Dynamic Grade Components Columns (sorted by name) */}
+                          {sortedAdminComponents.length > 0 ? (
+                            sortedAdminComponents.map(comp => (
+                              <th
+                                key={comp.id}
+                                className="py-3 px-3 font-bold text-center min-w-[105px] border-l border-slate-200/60 bg-emerald-50/20"
+                              >
+                                <div className="text-slate-800">{comp.name}</div>
+                                <div className="text-[10px] text-emerald-700 font-semibold">
+                                  {comp.weight}% • Tối đa {comp.maxScore}
+                                </div>
+                              </th>
+                            ))
+                          ) : (
+                            <th className="py-3 px-3 font-semibold text-center text-slate-400 italic bg-slate-50 border-l border-slate-200">
+                              Chưa có cột điểm nào (components: [])
                             </th>
-                          ))}
+                          )}
 
                           <th className="py-3 px-3 font-bold text-center w-28 border-l border-slate-200 bg-slate-100/60">
                             <div>Tổng kết</div>
@@ -2205,101 +2345,151 @@ export const AdminSectionsView: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {filteredGradesStudents.map((st, idx) => {
-                          const comps = gradesData.components || []
-                          let weightedScore = 0
-                          let hasAnyScore = false
+                        {sortedAdminGradesStudents.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={4 + (sortedAdminComponents.length > 0 ? sortedAdminComponents.length : 1) + 3}
+                              className="py-12 px-4 text-center text-slate-400 bg-slate-50/50"
+                            >
+                              <FileSpreadsheet className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                              <p className="font-bold text-sm text-slate-700">Lớp học phần chưa có sinh viên</p>
+                              <p className="text-xs text-slate-400 mt-1">
+                                {gradesSearch.trim()
+                                  ? `Không tìm thấy sinh viên khớp với từ khóa "${gradesSearch}".`
+                                  : 'Danh sách sinh viên đang rỗng (students: []). Chưa có sinh viên đăng ký.'}
+                              </p>
+                            </td>
+                          </tr>
+                        ) : (
+                          sortedAdminGradesStudents.map((st, idx) => {
+                            const comps = sortedAdminComponents
+                            let weightedScore = 0
+                            let hasAnyScore = false
+                            const totalWeight = comps.reduce((acc, c) => acc + (c.weight || 0), 0)
+                            const stGrades = st.grades || []
 
-                          comps.forEach(c => {
-                            const g = st.grades.find(item => item.gradeComponentId === c.id)
-                            if (g && typeof g.score === 'number') {
-                              hasAnyScore = true
-                              weightedScore += (g.score / (c.maxScore || 10)) * 10 * (c.weight / 100)
+                            comps.forEach(c => {
+                              const g = stGrades.find(
+                                item =>
+                                  (item.gradeComponentId || '').toLowerCase() ===
+                                  (c.id || '').toLowerCase()
+                              )
+                              if (g && typeof g.score === 'number' && g.score !== null) {
+                                hasAnyScore = true
+                                weightedScore += (g.score / (c.maxScore || 10)) * 10 * (c.weight / 100)
+                              }
+                            })
+
+                            const totalFinal = Number(weightedScore.toFixed(1))
+                            const normalized = totalWeight > 0 ? Number(((weightedScore / totalWeight) * 10).toFixed(1)) : totalFinal
+                            let letter = '-'
+                            let resultText = comps.length === 0 ? 'Chưa tạo cột' : totalWeight < 100 ? `Chưa hoàn tất (${totalWeight}%)` : 'Chưa hoàn tất'
+                            let resultColor = 'bg-blue-50 text-blue-700 border-blue-200'
+
+                            if (hasAnyScore) {
+                              const evalScore = totalWeight === 100 ? totalFinal : normalized
+                              if (evalScore >= 9.0) letter = 'A+'
+                              else if (evalScore >= 8.5) letter = 'A'
+                              else if (evalScore >= 8.0) letter = 'B+'
+                              else if (evalScore >= 7.0) letter = 'B'
+                              else if (evalScore >= 6.5) letter = 'C+'
+                              else if (evalScore >= 5.5) letter = 'C'
+                              else if (evalScore >= 5.0) letter = 'D+'
+                              else if (evalScore >= 4.0) letter = 'D'
+                              else letter = 'F'
+
+                              if (totalWeight === 100) {
+                                if (evalScore >= 5.0) {
+                                  resultText = 'Đạt'
+                                  resultColor = 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                } else if (evalScore >= 4.0) {
+                                  resultText = 'Cảnh báo'
+                                  resultColor = 'bg-amber-50 text-amber-700 border-amber-200'
+                                } else {
+                                  resultText = 'Không đạt'
+                                  resultColor = 'bg-rose-50 text-rose-700 border-rose-200'
+                                }
+                              }
                             }
-                          })
 
-                          const totalFinal = Number(weightedScore.toFixed(1))
-                          let letter = '-'
-                          let resultText = 'Chưa hoàn tất'
-                          let resultColor = 'bg-slate-50 text-slate-600 border-slate-200'
+                            return (
+                              <tr key={st.enrollmentId || st.studentId} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="py-3 px-3 text-center text-slate-400 font-semibold">
+                                  {(gradesPage - 1) * gradesPageSize + idx + 1}
+                                </td>
+                                <td className="py-3 px-4 font-mono font-bold text-slate-700">
+                                  {st.studentCode}
+                                </td>
+                                <td className="py-3 px-4 font-bold text-slate-800">
+                                  {st.fullName}
+                                </td>
+                                <td className="py-3 px-3 text-center">
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                                    {st.enrollmentStatus === 'Registered' ? 'Đã đăng ký' : st.enrollmentStatus}
+                                  </span>
+                                </td>
 
-                          if (hasAnyScore) {
-                            if (totalFinal >= 9.0) letter = 'A+'
-                            else if (totalFinal >= 8.5) letter = 'A'
-                            else if (totalFinal >= 8.0) letter = 'B+'
-                            else if (totalFinal >= 7.0) letter = 'B'
-                            else if (totalFinal >= 6.5) letter = 'C+'
-                            else if (totalFinal >= 5.5) letter = 'C'
-                            else if (totalFinal >= 5.0) letter = 'D+'
-                            else if (totalFinal >= 4.0) letter = 'D'
-                            else letter = 'F'
-
-                            if (totalFinal >= 5.0) {
-                              resultText = 'Đạt'
-                              resultColor = 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            } else if (totalFinal >= 4.0) {
-                              resultText = 'Cảnh báo'
-                              resultColor = 'bg-amber-50 text-amber-700 border-amber-200'
-                            } else {
-                              resultText = 'Không đạt'
-                              resultColor = 'bg-rose-50 text-rose-700 border-rose-200'
-                            }
-                          }
-
-                          return (
-                            <tr key={st.enrollmentId || st.studentId} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="py-3 px-3 text-center text-slate-400 font-semibold">
-                                {(gradesPage - 1) * gradesPageSize + idx + 1}
-                              </td>
-                              <td className="py-3 px-4 font-mono font-bold text-slate-700">
-                                {st.studentCode}
-                              </td>
-                              <td className="py-3 px-4 font-bold text-slate-800">
-                                {st.fullName}
-                              </td>
-                              <td className="py-3 px-3 text-center">
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
-                                  {st.enrollmentStatus === 'Registered' ? 'Đã đăng ký' : st.enrollmentStatus}
-                                </span>
-                              </td>
-
-                              {/* Component Scores */}
-                              {comps.map(comp => {
-                                const g = st.grades.find(item => item.gradeComponentId === comp.id)
-                                const score = g?.score
-                                return (
-                                  <td
-                                    key={comp.id}
-                                    className="py-3 px-3 text-center border-l border-slate-100"
-                                  >
-                                    {score !== null && score !== undefined ? (
-                                      <span
-                                        className="inline-block px-2.5 py-1 rounded-lg font-bold text-slate-800 bg-slate-50 border border-slate-200 text-xs"
-                                        title={g?.gradedAtUtc ? `Chấm lúc: ${g.gradedAtUtc}` : undefined}
-                                      >
-                                        {score}
-                                      </span>
-                                    ) : (
-                                      <span className="text-slate-300 font-mono italic">-</span>
-                                    )}
+                                {/* Component Scores */}
+                                {comps.length === 0 ? (
+                                  <td className="py-3 px-4 text-center text-slate-400 italic border-l border-slate-100 bg-slate-50/30 text-[11px]">
+                                    Chưa có cột điểm
                                   </td>
-                                )
-                              })}
+                                ) : (
+                                  comps.map(comp => {
+                                    const g = stGrades.find(
+                                      item =>
+                                        (item.gradeComponentId || '').toLowerCase() ===
+                                        (comp.id || '').toLowerCase()
+                                    )
+                                    const score = g?.score
+                                    const hasScore = score !== null && score !== undefined && typeof score === 'number'
+
+                                    return (
+                                      <td
+                                        key={comp.id}
+                                        className="py-3 px-3 text-center border-l border-slate-100"
+                                      >
+                                        {hasScore ? (
+                                          <span
+                                            className="inline-block px-2.5 py-1 rounded-lg font-bold text-slate-800 bg-slate-50 border border-slate-200 text-xs"
+                                            title={g?.gradedAtUtc ? `Chấm lúc: ${g.gradedAtUtc}` : undefined}
+                                          >
+                                            {score}
+                                          </span>
+                                        ) : (
+                                          <span
+                                            className="inline-block px-2 py-0.5 rounded text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200/80"
+                                            title="Chưa có điểm (score: null, gradeId: null)"
+                                          >
+                                            Chưa có điểm
+                                          </span>
+                                        )}
+                                      </td>
+                                    )
+                                  })
+                                )}
 
                               {/* Weighted Total */}
                               <td className="py-3 px-3 text-center font-extrabold border-l border-slate-200 bg-slate-50/50">
                                 {hasAnyScore ? (
-                                  <span
-                                    className={`inline-block px-2.5 py-1 rounded-lg text-xs font-black ${
-                                      totalFinal >= 8.0
-                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                        : totalFinal >= 5.0
-                                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                        : 'bg-rose-100 text-rose-800 border border-rose-200'
-                                    }`}
-                                  >
-                                    {totalFinal}
-                                  </span>
+                                  <div className="inline-flex flex-col items-center">
+                                    <span
+                                      className={`inline-block px-2.5 py-1 rounded-lg text-xs font-black ${
+                                        (totalWeight === 100 ? totalFinal : normalized) >= 8.0
+                                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                          : (totalWeight === 100 ? totalFinal : normalized) >= 5.0
+                                          ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                          : 'bg-rose-100 text-rose-800 border border-rose-200'
+                                      }`}
+                                    >
+                                      {totalWeight === 100 ? totalFinal : normalized}
+                                    </span>
+                                    {totalWeight < 100 && (
+                                      <span className="text-[9px] text-slate-500 font-medium mt-0.5">
+                                        Hệ số {totalFinal}/{(totalWeight / 10).toFixed(1)}
+                                      </span>
+                                    )}
+                                  </div>
                                 ) : (
                                   <span className="text-slate-300 font-mono italic">-</span>
                                 )}
@@ -2318,7 +2508,8 @@ export const AdminSectionsView: React.FC = () => {
                               </td>
                             </tr>
                           )
-                        })}
+                        })
+                      )}
                       </tbody>
                     </table>
                   </div>
@@ -2329,7 +2520,7 @@ export const AdminSectionsView: React.FC = () => {
             {/* Modal Pagination Footer */}
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
               <span className="text-slate-500 text-xs">
-                Hiển thị <strong>{filteredGradesStudents.length}</strong> / <strong>{gradesData?.totalCount || filteredGradesStudents.length}</strong> sinh viên
+                Hiển thị <strong>{sortedAdminGradesStudents.length}</strong> / <strong>{gradesData?.totalCount || sortedAdminGradesStudents.length}</strong> sinh viên
               </span>
 
               <div className="flex items-center gap-2">

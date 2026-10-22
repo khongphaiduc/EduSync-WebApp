@@ -95,7 +95,7 @@ export default function App() {
   const [requests, setRequests] = useState<ApplicationRequest[]>(INITIAL_REQUESTS)
   const [selectedRequest, setSelectedRequest] = useState<ApplicationRequest | null>(null)
   const [gradesData, setGradesData] = useState<Record<string, StudentGrade[]>>(INITIAL_STUDENTS_GRADES)
-  const [selectedSectionIdForGrades, setSelectedSectionIdForGrades] = useState<string>('11111111-1111-1111-1111-111111111111')
+  const [selectedSectionIdForGrades, setSelectedSectionIdForGrades] = useState<string>('')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const showToast = (msg: string) => {

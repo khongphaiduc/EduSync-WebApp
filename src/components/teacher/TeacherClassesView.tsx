@@ -33,7 +33,6 @@ import {
   getCourseSectionStudentsUrl,
   getCourseSectionGradesUrl
 } from '../../config'
-import { DEMO_SECTION_GRADES, FULL_SAMPLE_SECTION_GRADES } from '../../mockData'
 
 interface TeacherClassesViewProps {
   classes?: ClassItem[]
@@ -71,7 +70,6 @@ export const TeacherClassesView: React.FC<TeacherClassesViewProps> = ({
   // 5. Modal xem bảng điểm lớp học phần có cột các thành phần điểm (GET /api/course-sections/{sectionId}/grades)
   const [viewingGradesSection, setViewingGradesSection] = useState<ApiCourseSectionItem | null>(null)
   const [gradesData, setGradesData] = useState<CourseSectionGradesData | null>(null)
-  const [gradesPresetMode, setGradesPresetMode] = useState<'full' | 'minimal'>('full')
   const [gradesPage, setGradesPage] = useState<number>(1)
   const [gradesPageSize, setGradesPageSize] = useState<number>(20)
   const [isLoadingGrades, setIsLoadingGrades] = useState<boolean>(false)
@@ -246,34 +244,29 @@ export const TeacherClassesView: React.FC<TeacherClassesViewProps> = ({
             return
           }
         }
-        const baseData = gradesPresetMode === 'minimal' ? DEMO_SECTION_GRADES : FULL_SAMPLE_SECTION_GRADES
         setGradesData({
-          ...baseData,
-          courseSectionId: sectionId
+          courseSectionId: sectionId,
+          components: [],
+          students: [],
+          page: targetPage,
+          pageSize: targetPageSize,
+          totalCount: 0
         })
       } catch {
-        const baseData = gradesPresetMode === 'minimal' ? DEMO_SECTION_GRADES : FULL_SAMPLE_SECTION_GRADES
         setGradesData({
-          ...baseData,
-          courseSectionId: sectionId
+          courseSectionId: sectionId,
+          components: [],
+          students: [],
+          page: targetPage,
+          pageSize: targetPageSize,
+          totalCount: 0
         })
       } finally {
         setIsLoadingGrades(false)
       }
     },
-    [gradesPresetMode]
+    []
   )
-
-  const handleSwitchGradesPreset = (mode: 'full' | 'minimal') => {
-    setGradesPresetMode(mode)
-    const baseData = mode === 'minimal' ? DEMO_SECTION_GRADES : FULL_SAMPLE_SECTION_GRADES
-    if (viewingGradesSection) {
-      setGradesData({
-        ...baseData,
-        courseSectionId: viewingGradesSection.id
-      })
-    }
-  }
 
   const handleOpenGradesModal = (sec: ApiCourseSectionItem) => {
     setViewingGradesSection(sec)
@@ -1147,33 +1140,6 @@ export const TeacherClassesView: React.FC<TeacherClassesViewProps> = ({
                 />
               </div>
 
-              {/* Bộ chọn Chế độ hiển thị cột điểm */}
-              <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSwitchGradesPreset('full')}
-                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                    gradesPresetMode === 'full'
-                      ? 'bg-white text-blue-700 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Hiện đầy đủ tất cả 4 thành phần điểm (Chuyên cần 10%, Thực hành 20%, Giữa kỳ 30%, Cuối kỳ 40% = 100%)"
-                >
-                  Đầy đủ 4 cột (100%)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSwitchGradesPreset('minimal')}
-                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                    gradesPresetMode === 'minimal'
-                      ? 'bg-white text-blue-700 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Hiện mẫu API 1 cột Giữa kỳ (30%)"
-                >
-                  Mẫu API 1 cột (30%)
-                </button>
-              </div>
 
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span>Số dòng:</span>

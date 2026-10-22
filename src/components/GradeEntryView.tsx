@@ -38,13 +38,6 @@ import {
   getUpdateCourseSectionGradesUrl,
   getLecturerCourseSectionsUrl
 } from '../config'
-import {
-  DEMO_SECTION_GRADES,
-  FULL_SAMPLE_SECTION_GRADES,
-  EMPTY_STUDENTS_SECTION_GRADES,
-  EMPTY_COMPONENTS_SECTION_GRADES
-} from '../mockData'
-
 interface GradeEntryViewProps {
   classes?: ClassItem[]
   gradesData?: Record<string, StudentGrade[]>
@@ -55,10 +48,12 @@ interface GradeEntryViewProps {
 export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
   classes = [],
   onSaveGrades,
-  initialSectionId = '11111111-1111-1111-1111-111111111111'
+  initialSectionId = ''
 }) => {
   // Quản lý lớp học phần đang được chọn
-  const [selectedSectionId, setSelectedSectionId] = useState<string>(initialSectionId)
+  const [selectedSectionId, setSelectedSectionId] = useState<string>(
+    initialSectionId || (classes[0]?.id || classes[0]?.code || '')
+  )
   const [isCustomSection, setIsCustomSection] = useState<boolean>(false)
   const [customSectionInput, setCustomSectionInput] = useState<string>('')
 
@@ -66,20 +61,22 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
   const [lecturerSections, setLecturerSections] = useState<ApiCourseSectionItem[]>([])
 
   // Dữ liệu bảng điểm từ API GET /api/course-sections/{sectionId}/grades
-  // Khởi tạo mặc định với bộ dữ liệu chuẩn 200 OK (2 cột: Giữa kỳ 30%, Cuối kỳ 70%, STU001)
-  const [sectionGrades, setSectionGrades] = useState<CourseSectionGradesData>(DEMO_SECTION_GRADES)
+  const [sectionGrades, setSectionGrades] = useState<CourseSectionGradesData>({
+    courseSectionId: '',
+    components: [],
+    students: [],
+    page: 1,
+    pageSize: 20,
+    totalCount: 0
+  })
   const [page, setPage] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(20)
-  const [totalCount, setTotalCount] = useState<number>(DEMO_SECTION_GRADES.totalCount || 1)
+  const [totalCount, setTotalCount] = useState<number>(0)
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [apiError, setApiError] = useState<string | null>(null)
 
   // Lưu trữ raw payload response để hiển thị JSON inspector
-  const [rawApiResponse, setRawApiResponse] = useState<CourseSectionGradesResponse | null>({
-    success: true,
-    message: 'Success',
-    data: DEMO_SECTION_GRADES
-  })
+  const [rawApiResponse, setRawApiResponse] = useState<CourseSectionGradesResponse | null>(null)
   const [showJsonInspector, setShowJsonInspector] = useState<boolean>(false)
   const [copiedJson, setCopiedJson] = useState<boolean>(false)
 
@@ -92,20 +89,15 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
   const [inspectorTab, setInspectorTab] = useState<'get_response' | 'put_request' | 'put_response'>('get_response')
 
   // Local edited student grades list: SectionStudentGradeItem[]
-  const [localStudents, setLocalStudents] = useState<SectionStudentGradeItem[]>(
-    DEMO_SECTION_GRADES.students || []
-  )
+  const [localStudents, setLocalStudents] = useState<SectionStudentGradeItem[]>([])
   const [searchStudent, setSearchStudent] = useState('')
   const [hasChanges, setHasChanges] = useState(false)
 
-  // Quản lý Modal thêm cột điểm thành phần mới & Preset hiển thị
+  // Quản lý Modal thêm cột điểm thành phần mới
   const [showAddComponentModal, setShowAddComponentModal] = useState<boolean>(false)
   const [newCompName, setNewCompName] = useState<string>('')
   const [newCompWeight, setNewCompWeight] = useState<string>('20')
   const [newCompMaxScore, setNewCompMaxScore] = useState<string>('10')
-  const [selectedPresetMode, setSelectedPresetMode] = useState<
-    'api_sample' | 'full' | 'empty_students' | 'empty_components'
-  >('api_sample')
 
   // Đồng bộ selectedSectionId khi initialSectionId thay đổi từ ngoài truyền vào
   useEffect(() => {
@@ -131,7 +123,14 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
         if (res.ok) {
           const json: ApiCourseSectionListResponse = await res.json()
           if (json.success && json.data?.items) {
-            setLecturerSections(json.data.items)
+            const items = json.data.items
+            setLecturerSections(items)
+            setSelectedSectionId(prev => {
+              if (!prev && items.length > 0) {
+                return items[0].id
+              }
+              return prev
+            })
           }
         }
       } catch {
@@ -144,6 +143,21 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
   // Gọi API GET /api/course-sections/{sectionId}/grades?page={page}&pageSize={pageSize}
   const fetchGrades = useCallback(
     async (secId: string, targetPage = 1, targetPageSize = 20) => {
+      if (!secId) {
+        setSectionGrades({
+          courseSectionId: '',
+          components: [],
+          students: [],
+          page: targetPage,
+          pageSize: targetPageSize,
+          totalCount: 0
+        })
+        setLocalStudents([])
+        setTotalCount(0)
+        setRawApiResponse(null)
+        return
+      }
+
       setIsLoading(true)
       setApiError(null)
       const token = localStorage.getItem('accessToken')
@@ -192,69 +206,36 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
           setApiError(errorMsg)
         }
 
-        // Fallback sang mock data theo chế độ preset đang chọn
-        const baseData =
-          selectedPresetMode === 'full'
-            ? FULL_SAMPLE_SECTION_GRADES
-            : selectedPresetMode === 'empty_students'
-            ? EMPTY_STUDENTS_SECTION_GRADES
-            : selectedPresetMode === 'empty_components'
-            ? EMPTY_COMPONENTS_SECTION_GRADES
-            : DEMO_SECTION_GRADES
-
-        const fallbackData: CourseSectionGradesData = {
-          ...baseData,
-          courseSectionId: secId
-        }
-        setSectionGrades(fallbackData)
-        setLocalStudents(fallbackData.students)
-        setTotalCount(fallbackData.totalCount)
-        setRawApiResponse({
-          success: true,
-          message:
-            selectedPresetMode === 'full'
-              ? 'Success (Mock payload - Đầy đủ 4 cột thành phần)'
-              : selectedPresetMode === 'empty_students'
-              ? 'Success (Mock payload - Lớp chưa có sinh viên: students = [])'
-              : selectedPresetMode === 'empty_components'
-              ? 'Success (Mock payload - Chưa tạo cột điểm: components = [])'
-              : 'Success (Mock payload chuẩn 200 OK - Giữa kỳ 30%, Cuối kỳ 70%)',
-          data: fallbackData
+        // Khi API lỗi, xóa bảng điểm
+        setSectionGrades({
+          courseSectionId: secId,
+          components: [],
+          students: [],
+          page: targetPage,
+          pageSize: targetPageSize,
+          totalCount: 0
         })
+        setLocalStudents([])
+        setTotalCount(0)
+        setRawApiResponse(null)
       } catch {
-        const baseData =
-          selectedPresetMode === 'full'
-            ? FULL_SAMPLE_SECTION_GRADES
-            : selectedPresetMode === 'empty_students'
-            ? EMPTY_STUDENTS_SECTION_GRADES
-            : selectedPresetMode === 'empty_components'
-            ? EMPTY_COMPONENTS_SECTION_GRADES
-            : DEMO_SECTION_GRADES
-
-        const fallbackData: CourseSectionGradesData = {
-          ...baseData,
-          courseSectionId: secId
-        }
-        setSectionGrades(fallbackData)
-        setLocalStudents(fallbackData.students)
-        setTotalCount(fallbackData.totalCount)
-        setRawApiResponse({
-          success: true,
-          message:
-            selectedPresetMode === 'full'
-              ? 'Success (Mock payload - Đầy đủ 4 cột thành phần)'
-              : selectedPresetMode === 'empty_students'
-              ? 'Success (Mock payload - Lớp chưa có sinh viên: students = [])'
-              : selectedPresetMode === 'empty_components'
-              ? 'Success (Mock payload - Chưa tạo cột điểm: components = [])'
-              : 'Success (Mock payload chuẩn 200 OK - Giữa kỳ 30%, Cuối kỳ 70%)',
-          data: fallbackData
+        setApiError('Không thể kết nối đến máy chủ để tải bảng điểm. Vui lòng kiểm tra kết nối mạng.')
+        setSectionGrades({
+          courseSectionId: secId,
+          components: [],
+          students: [],
+          page: targetPage,
+          pageSize: targetPageSize,
+          totalCount: 0
         })
+        setLocalStudents([])
+        setTotalCount(0)
+        setRawApiResponse(null)
       } finally {
         setIsLoading(false)
       }
     },
-    [selectedPresetMode]
+    []
   )
 
   useEffect(() => {
@@ -278,62 +259,6 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
     if (!customSectionInput.trim()) return
     setSelectedSectionId(customSectionInput.trim())
     setPage(1)
-    setHasChanges(false)
-  }
-
-  // 1. Nạp bộ Payload mẫu API 200 OK chuẩn (2 cột: Giữa kỳ 30%, Cuối kỳ 70%)
-  const handleLoadApiSamplePayload = () => {
-    setSelectedPresetMode('api_sample')
-    setSectionGrades(DEMO_SECTION_GRADES)
-    setLocalStudents(DEMO_SECTION_GRADES.students)
-    setTotalCount(DEMO_SECTION_GRADES.totalCount)
-    setRawApiResponse({
-      success: true,
-      message: 'Success (Mẫu API chuẩn 200 OK - 2 cột Giữa kỳ 30%, Cuối kỳ 70%)',
-      data: DEMO_SECTION_GRADES
-    })
-    setHasChanges(false)
-  }
-
-  // 2. Nạp bộ điểm ĐẦY ĐỦ TẤT CẢ THÀNH PHẦN (Chuyên cần 10%, Thực hành 20%, Giữa kỳ 30%, Cuối kỳ 40% = 100%)
-  const handleLoadFullGradebook = () => {
-    setSelectedPresetMode('full')
-    setSectionGrades(FULL_SAMPLE_SECTION_GRADES)
-    setLocalStudents(FULL_SAMPLE_SECTION_GRADES.students)
-    setTotalCount(FULL_SAMPLE_SECTION_GRADES.totalCount)
-    setRawApiResponse({
-      success: true,
-      message: 'Success (Đầy đủ tất cả thành phần điểm)',
-      data: FULL_SAMPLE_SECTION_GRADES
-    })
-    setHasChanges(false)
-  }
-
-  // 3. Nạp trường hợp lớp chưa có sinh viên: students = []
-  const handleLoadEmptyStudents = () => {
-    setSelectedPresetMode('empty_students')
-    setSectionGrades(EMPTY_STUDENTS_SECTION_GRADES)
-    setLocalStudents(EMPTY_STUDENTS_SECTION_GRADES.students)
-    setTotalCount(0)
-    setRawApiResponse({
-      success: true,
-      message: 'Success (Lớp học phần chưa có sinh viên: students = [])',
-      data: EMPTY_STUDENTS_SECTION_GRADES
-    })
-    setHasChanges(false)
-  }
-
-  // 4. Nạp trường hợp chưa tạo cột điểm: components = []
-  const handleLoadEmptyComponents = () => {
-    setSelectedPresetMode('empty_components')
-    setSectionGrades(EMPTY_COMPONENTS_SECTION_GRADES)
-    setLocalStudents(EMPTY_COMPONENTS_SECTION_GRADES.students)
-    setTotalCount(EMPTY_COMPONENTS_SECTION_GRADES.totalCount)
-    setRawApiResponse({
-      success: true,
-      message: 'Success (Chưa tạo cột điểm thành phần: components = [])',
-      data: EMPTY_COMPONENTS_SECTION_GRADES
-    })
     setHasChanges(false)
   }
 
@@ -403,31 +328,6 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
     setHasChanges(true)
   }
 
-  // Thêm / bớt sinh viên mẫu chưa có điểm (null) để kiểm tra quy tắc null
-  const handleToggleNullStudent = () => {
-    const hasNullStudent = localStudents.some(s => s.studentCode === 'STU002')
-    if (hasNullStudent) {
-      setLocalStudents(prev => prev.filter(s => s.studentCode !== 'STU002'))
-      setTotalCount(prev => Math.max(1, prev - 1))
-    } else {
-      const nullStudent: SectionStudentGradeItem = {
-        enrollmentId: '33333333-3333-3333-3333-333333333334',
-        studentId: '44444444-4444-4444-4444-444444444445',
-        studentCode: 'STU002',
-        fullName: 'Trần Thị B (Chưa chấm điểm)',
-        enrollmentStatus: 'Registered',
-        grades: (sectionGrades.components || []).map(c => ({
-          gradeComponentId: c.id,
-          gradeId: null,
-          score: null,
-          gradedAtUtc: null,
-          updatedAtUtc: null
-        }))
-      }
-      setLocalStudents(prev => [...prev, nullStudent])
-      setTotalCount(prev => prev + 1)
-    }
-  }
 
   // Cập nhật điểm thành phần của một sinh viên:
   // "Nếu sinh viên chưa có điểm ở một thành phần, gradeId, score và các thời điểm chấm điểm sẽ là null."
@@ -662,37 +562,7 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
         setSaveApiError(errorMsg)
       }
     } catch {
-      // Giả lập lưu thành công khi ở môi trường dev/mock không có backend thật
-      const mockSuccessJson: BatchUpdateSectionGradesResponse = {
-        success: true,
-        message: 'Success (Mock - Giả lập nhập điểm thành công)',
-        data: { updatedCount: items.length }
-      }
-      setLastPutResponse(mockSuccessJson)
-      setHasChanges(false)
-      setSaveSuccessMessage(`(Chế độ Mock) Đã giả lập lưu thành công ${items.length} đầu điểm sinh viên!`)
-      setTimeout(() => setSaveSuccessMessage(null), 4000)
-
-      if (onSaveGrades) {
-        const legacyGrades: StudentGrade[] = localStudents.map(st => {
-          const { total, letter, status } = calculateStudentTotal(st)
-          const stGrades = st.grades || []
-          return {
-            id: st.enrollmentId,
-            studentCode: st.studentCode,
-            fullName: st.fullName,
-            avatar: `https://images.unsplash.com/photo-1534528741775?w=150&auto=format&fit=crop&q=80`,
-            attendance: 10,
-            midterm: stGrades[0]?.score || 0,
-            practical: 0,
-            finalExam: stGrades[1]?.score || 0,
-            totalScore: total,
-            letterGrade: letter,
-            status: status === 'Chưa chấm' ? 'Không đạt' : status === 'Chưa hoàn tất' ? 'Cảnh báo' : status === 'Chưa tạo cột' ? 'Không đạt' : status
-          }
-        })
-        onSaveGrades(selectedSectionId, legacyGrades)
-      }
+      setSaveApiError('Không thể kết nối đến máy chủ để lưu bảng điểm. Vui lòng kiểm tra kết nối mạng.')
     } finally {
       setIsSaving(false)
     }
@@ -837,11 +707,8 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
             <FileSpreadsheet className="w-4 h-4" />
             <span>Phân hệ Đào tạo & Quản lý Điểm số</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight mt-1 flex items-center gap-2.5 flex-wrap">
-            <span>Bảng Điểm Học Phần</span>
-            <span className="px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-mono font-bold border border-blue-200">
-              GET /api/course-sections/{'{sectionId}'}/grades
-            </span>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight mt-1">
+            Bảng Điểm Học Phần
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             Mã lớp học phần: <strong className="text-blue-600 font-mono">{selectedSectionId}</strong> • Hỗ trợ cấu trúc điểm thành phần động theo từng học phần.
@@ -855,9 +722,7 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
             onChange={e => handleSelectSection(e.target.value)}
             className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer min-w-[260px] max-w-full"
           >
-            <option value="11111111-1111-1111-1111-111111111111">
-              Lớp mẫu API: 11111111-1111-1111-1111-111111111111
-            </option>
+            {!selectedSectionId && <option value="">-- Chọn lớp học phần --</option>}
             {lecturerSections.map(sec => (
               <option key={sec.id} value={sec.id}>
                 {sec.sectionCode} - {sec.courseName || 'Lớp học phần'} ({sec.id.slice(0, 8)}...)
@@ -873,60 +738,12 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
 
           <button
             onClick={() => fetchGrades(selectedSectionId, page, pageSize)}
-            disabled={isLoading}
+            disabled={isLoading || !selectedSectionId}
             className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center disabled:opacity-50"
             title="Tải lại từ API"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
-
-          {/* Bộ chọn Chế độ hiển thị cột điểm theo đặc tả API */}
-          <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs gap-1 flex-wrap">
-            <button
-              onClick={handleLoadApiSamplePayload}
-              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                selectedPresetMode === 'api_sample'
-                  ? 'bg-white text-blue-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Bộ dữ liệu chuẩn 200 OK theo đặc tả API: 2 cột (Giữa kỳ 30%, Cuối kỳ 70%, STU001)"
-            >
-              Mẫu 200 OK (2 cột)
-            </button>
-            <button
-              onClick={handleLoadFullGradebook}
-              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                selectedPresetMode === 'full'
-                  ? 'bg-white text-blue-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Hiện đầy đủ tất cả 4 thành phần điểm (Chuyên cần 10%, Thực hành 20%, Giữa kỳ 30%, Cuối kỳ 40% = 100%)"
-            >
-              Đầy đủ 4 cột (100%)
-            </button>
-            <button
-              onClick={handleLoadEmptyStudents}
-              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                selectedPresetMode === 'empty_students'
-                  ? 'bg-white text-blue-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Trường hợp lớp chưa có sinh viên: students = []"
-            >
-              Lớp chưa có SV
-            </button>
-            <button
-              onClick={handleLoadEmptyComponents}
-              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                selectedPresetMode === 'empty_components'
-                  ? 'bg-white text-blue-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Trường hợp lớp chưa tạo cột điểm: components = []"
-            >
-              Chưa tạo cột điểm
-            </button>
-          </div>
 
           <button
             onClick={() => setShowAddComponentModal(true)}
@@ -980,7 +797,7 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
           <div className="flex-1">
             <input
               type="text"
-              placeholder="Nhập courseSectionId (UUID) ví dụ: 11111111-1111-1111-1111-111111111111..."
+              placeholder="Nhập mã courseSectionId (UUID)..."
               value={customSectionInput}
               onChange={e => setCustomSectionInput(e.target.value)}
               className="w-full px-3 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -995,64 +812,6 @@ export const GradeEntryView: React.FC<GradeEntryViewProps> = ({
         </form>
       )}
 
-      {/* Endpoint Bar (GET & PUT) */}
-      <div className="px-5 py-3 bg-slate-900 text-slate-200 rounded-2xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded-md bg-emerald-500 text-slate-950 font-bold font-mono text-[10px]">
-              GET
-            </span>
-            <span className="font-mono text-[11px] text-slate-300">
-              /api/course-sections/<span className="text-emerald-400 font-bold">{selectedSectionId}</span>/grades?page={page}&pageSize={pageSize}
-            </span>
-          </div>
-
-          <div className="hidden sm:block text-slate-600">•</div>
-
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded-md bg-blue-500 text-white font-bold font-mono text-[10px]">
-              PUT
-            </span>
-            <span className="font-mono text-[11px] text-blue-300">
-              /api/course-sections/<span className="text-blue-200 font-bold">{selectedSectionId}</span>/grades
-            </span>
-            <span className="text-[10px] text-slate-400 font-sans italic">
-              (Batch {currentPendingPutPayload.items.length} điểm)
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 text-[11px] text-slate-400 shrink-0">
-          <span>Auth:</span>
-          <span className="px-2 py-0.5 rounded-md bg-slate-800 text-blue-300 font-mono font-semibold">
-            Bearer &lt;admin / giảng viên phụ trách&gt;
-          </span>
-        </div>
-      </div>
-
-      {/* Info notice about frontend rules */}
-      <div className="px-4 py-3 bg-blue-50/70 border border-blue-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-blue-900">
-        <div className="flex items-start gap-2.5">
-          <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-          <div className="leading-relaxed">
-            <strong>Quy tắc xử lý frontend:</strong> Cột điểm ghép bằng{' '}
-            <code className="px-1.5 py-0.5 bg-blue-100 rounded text-[11px] font-mono">
-              students[].grades[].gradeComponentId === components[].id
-            </code>
-            . Cột điểm được sắp theo <code className="px-1 py-0.5 bg-blue-100 rounded font-mono">name</code>, sinh viên sắp theo{' '}
-            <code className="px-1 py-0.5 bg-blue-100 rounded font-mono">studentCode</code>. Khi{' '}
-            <code className="px-1 py-0.5 bg-blue-100 rounded font-mono">score: null</code>, hiển thị nhãn{' '}
-            <span className="font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">Chưa có điểm</span>. Khi bấm <strong>Lưu bảng điểm</strong>, hệ thống tự động gom các đầu điểm dạng mảng <code>items: [{'{'} enrollmentId, gradeComponentId, score {'}'}]</code> gửi qua <code>PUT /api/course-sections/{'{sectionId}'}/grades</code> trong một request.
-          </div>
-        </div>
-        <button
-          onClick={handleToggleNullStudent}
-          className="self-start sm:self-center px-3 py-1.5 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-900 font-bold text-[11px] transition-colors cursor-pointer shrink-0 border border-blue-300/80"
-          title="Thử nghiệm sinh viên chưa có điểm (null) để kiểm tra giao diện hiển thị badge Chưa có điểm"
-        >
-          {localStudents.some(s => s.studentCode === 'STU002') ? 'Ẩn SV mẫu điểm null' : '+ Thử SV mẫu điểm null'}
-        </button>
-      </div>
 
       {saveSuccessMessage && (
         <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-in fade-in duration-300">

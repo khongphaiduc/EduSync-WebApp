@@ -50,12 +50,6 @@ import {
   getCourseSectionGradesUrl,
   getUpdateCourseSectionGradesUrl
 } from '../../config'
-import {
-  DEMO_SECTION_GRADES,
-  FULL_SAMPLE_SECTION_GRADES,
-  EMPTY_STUDENTS_SECTION_GRADES,
-  EMPTY_COMPONENTS_SECTION_GRADES
-} from '../../mockData'
 
 export const AdminSectionsView: React.FC = () => {
   // Danh sách lớp học phần lấy từ API GET /api/course-sections
@@ -132,9 +126,6 @@ export const AdminSectionsView: React.FC = () => {
   // Modal xem bảng điểm lớp học phần (GET /api/course-sections/{sectionId}/grades)
   const [viewingGradesSection, setViewingGradesSection] = useState<ApiCourseSectionItem | null>(null)
   const [gradesData, setGradesData] = useState<CourseSectionGradesData | null>(null)
-  const [gradesPresetMode, setGradesPresetMode] = useState<
-    'api_sample' | 'full' | 'empty_students' | 'empty_components'
-  >('api_sample')
   const [gradesPage, setGradesPage] = useState<number>(1)
   const [gradesPageSize, setGradesPageSize] = useState<number>(20)
   const [isLoadingGrades, setIsLoadingGrades] = useState<boolean>(false)
@@ -402,61 +393,30 @@ export const AdminSectionsView: React.FC = () => {
           setGradesError(errorMsg)
         }
 
-        // Fallback to demo grades
-        const baseData =
-          gradesPresetMode === 'full'
-            ? FULL_SAMPLE_SECTION_GRADES
-            : gradesPresetMode === 'empty_students'
-            ? EMPTY_STUDENTS_SECTION_GRADES
-            : gradesPresetMode === 'empty_components'
-            ? EMPTY_COMPONENTS_SECTION_GRADES
-            : DEMO_SECTION_GRADES
-
         setGradesData({
-          ...baseData,
-          courseSectionId: sectionId
+          courseSectionId: sectionId,
+          components: [],
+          students: [],
+          page: targetPage,
+          pageSize: targetPageSize,
+          totalCount: 0
         })
       } catch {
-        const baseData =
-          gradesPresetMode === 'full'
-            ? FULL_SAMPLE_SECTION_GRADES
-            : gradesPresetMode === 'empty_students'
-            ? EMPTY_STUDENTS_SECTION_GRADES
-            : gradesPresetMode === 'empty_components'
-            ? EMPTY_COMPONENTS_SECTION_GRADES
-            : DEMO_SECTION_GRADES
-
+        setGradesError('Không thể kết nối đến máy chủ để tải bảng điểm. Vui lòng kiểm tra kết nối mạng.')
         setGradesData({
-          ...baseData,
-          courseSectionId: sectionId
+          courseSectionId: sectionId,
+          components: [],
+          students: [],
+          page: targetPage,
+          pageSize: targetPageSize,
+          totalCount: 0
         })
       } finally {
         setIsLoadingGrades(false)
       }
     },
-    [gradesPresetMode]
+    []
   )
-
-  const handleSwitchAdminGradesPreset = (
-    mode: 'api_sample' | 'full' | 'empty_students' | 'empty_components'
-  ) => {
-    setGradesPresetMode(mode)
-    const baseData =
-      mode === 'full'
-        ? FULL_SAMPLE_SECTION_GRADES
-        : mode === 'empty_students'
-        ? EMPTY_STUDENTS_SECTION_GRADES
-        : mode === 'empty_components'
-        ? EMPTY_COMPONENTS_SECTION_GRADES
-        : DEMO_SECTION_GRADES
-
-    if (viewingGradesSection) {
-      setGradesData({
-        ...baseData,
-        courseSectionId: viewingGradesSection.id
-      })
-    }
-  }
 
   const handleOpenGradesModal = (sec: ApiCourseSectionItem) => {
     setViewingGradesSection(sec)
@@ -633,8 +593,7 @@ export const AdminSectionsView: React.FC = () => {
         showToast(err?.message || `Lỗi ${res.status}: Không thể lưu bảng điểm qua API PUT.`)
       }
     } catch {
-      setAdminGradesHasChanges(false)
-      showToast(`(Chế độ Mock) Đã giả lập lưu thành công ${items.length} đầu điểm qua PUT API!`)
+      showToast('Không thể kết nối đến máy chủ để lưu bảng điểm qua API PUT.')
     } finally {
       setIsSavingAdminGrades(false)
     }
@@ -2245,57 +2204,6 @@ export const AdminSectionsView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
-                {/* Bộ chọn Chế độ hiển thị cột điểm */}
-                <div className="inline-flex rounded-xl bg-emerald-100/60 p-1 border border-emerald-200 text-xs flex-wrap gap-1">
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchAdminGradesPreset('api_sample')}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                      gradesPresetMode === 'api_sample'
-                        ? 'bg-white text-emerald-800 shadow-xs'
-                        : 'text-emerald-700 hover:text-emerald-950'
-                    }`}
-                    title="Hiện mẫu API chuẩn 200 OK: 2 cột (Giữa kỳ 30%, Cuối kỳ 70%)"
-                  >
-                    Mẫu 200 OK (2 cột)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchAdminGradesPreset('full')}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                      gradesPresetMode === 'full'
-                        ? 'bg-white text-emerald-800 shadow-xs'
-                        : 'text-emerald-700 hover:text-emerald-950'
-                    }`}
-                    title="Hiện đầy đủ tất cả 4 thành phần điểm (Chuyên cần 10%, Thực hành 20%, Giữa kỳ 30%, Cuối kỳ 40% = 100%)"
-                  >
-                    Đầy đủ 4 cột (100%)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchAdminGradesPreset('empty_students')}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                      gradesPresetMode === 'empty_students'
-                        ? 'bg-white text-emerald-800 shadow-xs'
-                        : 'text-emerald-700 hover:text-emerald-950'
-                    }`}
-                    title="Trường hợp lớp chưa có sinh viên: students = []"
-                  >
-                    Lớp chưa có SV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchAdminGradesPreset('empty_components')}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                      gradesPresetMode === 'empty_components'
-                        ? 'bg-white text-emerald-800 shadow-xs'
-                        : 'text-emerald-700 hover:text-emerald-950'
-                    }`}
-                    title="Trường hợp lớp chưa tạo cột điểm: components = []"
-                  >
-                    Chưa tạo cột điểm
-                  </button>
-                </div>
 
                 <button
                   type="button"

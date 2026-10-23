@@ -95,7 +95,7 @@ export const AdminSubjectsView: React.FC = () => {
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false)
 
   // Cấu hình Base URL API
-  const [baseUrl] = useState<string>(API_BASE_URL || 'https://localhost:7248')
+  const [baseUrl] = useState<string>(API_BASE_URL || 'https://localhost:7249')
 
   // Tìm kiếm client
   const [search, setSearch] = useState('')

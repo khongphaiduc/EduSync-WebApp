@@ -421,6 +421,27 @@ export interface ApiSectionStudentListResponse {
   data?: ApiSectionStudentListData
 }
 
+export interface EnrollStudentToSectionRequest {
+  studentCode: string
+}
+
+export interface EnrollStudentToSectionResult {
+  id?: string
+  enrollmentId?: string
+  studentId: string
+  courseSectionId: string
+  enrolledAt: string
+  status: string
+  studentCode?: string
+  fullName?: string
+}
+
+export interface EnrollStudentToSectionResponse {
+  success: boolean
+  message: string
+  data?: EnrollStudentToSectionResult
+}
+
 export interface CreateGradeComponentRequest {
   name: string
   weight: number

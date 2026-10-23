@@ -104,8 +104,8 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false)
 
-  // Cấu hình Base URL API (Hỗ trợ chuyển đổi giữa http://localhost:5271 và https://localhost:7248)
-  const [baseUrl, setBaseUrl] = useState<string>(API_BASE_URL || 'http://localhost:5271')
+  // Cấu hình Base URL API (Hỗ trợ chuyển đổi giữa http://localhost:5271 và https://localhost:7249)
+  const [baseUrl, setBaseUrl] = useState<string>(API_BASE_URL || 'https://localhost:7249')
 
   // Bộ lọc và tìm kiếm client
   const [search, setSearch] = useState('')
@@ -228,7 +228,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
         console.error('Lỗi khi gọi API students:', err)
         setHttpStatus(0)
         setErrorMessage(
-          `Không thể kết nối đến máy chủ API (${targetBase}). Vui lòng kiểm tra backend ASP.NET Core hoặc chuyển đổi giữa cổng HTTP 5271 và HTTPS 7248.`
+          `Không thể kết nối đến máy chủ API (${targetBase}). Vui lòng kiểm tra backend ASP.NET Core hoặc chuyển đổi giữa cổng HTTP 5271 và HTTPS 7249.`
         )
       } finally {
         setIsLoading(false)
@@ -287,9 +287,9 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     fetchStudents(1, newSize, baseUrl)
   }
 
-  // Đổi nhanh API Base URL giữa 5271 (HTTP) và 7248 (HTTPS)
+  // Đổi nhanh API Base URL giữa 5271 (HTTP) và 7249 (HTTPS)
   const toggleBaseUrl = () => {
-    const nextUrl = baseUrl.includes('5271') ? 'https://localhost:7248' : 'http://localhost:5271'
+    const nextUrl = baseUrl.includes('5271') ? (API_BASE_URL || 'https://localhost:7249') : 'http://localhost:5271'
     setBaseUrl(nextUrl)
   }
 
@@ -339,11 +339,11 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
           {/* Base URL Switcher */}
           <button
             onClick={toggleBaseUrl}
-            title="Đổi giữa cổng HTTP (5271) và HTTPS (7248)"
+            title="Đổi giữa cổng HTTP (5271) và HTTPS (7249)"
             className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-medium transition-colors cursor-pointer"
           >
             <Server className="w-3.5 h-3.5 text-slate-500" />
-            <span>Port: {baseUrl.includes('5271') ? '5271 (HTTP)' : '7248 (HTTPS)'}</span>
+            <span>Port: {baseUrl.includes('5271') ? '5271 (HTTP)' : '7249 (HTTPS)'}</span>
           </button>
 
           {/* Refresh Button */}
@@ -388,7 +388,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             <div>
               <span className="font-bold text-amber-900 block">Đang hiển thị dữ liệu mẫu (Offline Demo Mode)</span>
               <span className="text-amber-700">
-                Backend chưa trả về dữ liệu. Bấm "Thử lại kết nối" khi API ASP.NET Core trên cổng 5271/7248 đã sẵn sàng.
+                Backend chưa trả về dữ liệu. Bấm "Thử lại kết nối" khi API ASP.NET Core trên cổng 5271/7249 đã sẵn sàng.
               </span>
             </div>
           </div>
@@ -502,7 +502,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                   onClick={toggleBaseUrl}
                   className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                 >
-                  Đổi sang {baseUrl.includes('5271') ? 'HTTPS 7248' : 'HTTP 5271'}
+                  Đổi sang {baseUrl.includes('5271') ? 'HTTPS 7249' : 'HTTP 5271'}
                 </button>
                 <button
                   onClick={enableDemoMode}

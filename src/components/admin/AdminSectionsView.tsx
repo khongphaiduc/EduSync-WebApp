@@ -21,8 +21,10 @@ import {
   FileSpreadsheet,
   Download,
   Save,
-  Edit3
+  Edit3,
+  UserPlus
 } from 'lucide-react'
+import { AddStudentToSectionModal } from './AddStudentToSectionModal'
 import type {
   ApiCourseItem,
   ApiSemesterItem,
@@ -78,7 +80,7 @@ export const AdminSectionsView: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null)
 
   // Cấu hình Base URL API
-  const [baseUrl] = useState<string>(API_BASE_URL || 'https://localhost:7248')
+  const [baseUrl] = useState<string>(API_BASE_URL || 'https://localhost:7249')
 
   // Form state tạo lớp học phần
   const [newSection, setNewSection] = useState<{
@@ -109,6 +111,9 @@ export const AdminSectionsView: React.FC = () => {
   const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(false)
   const [studentsError, setStudentsError] = useState<string | null>(null)
   const [studentsSearch, setStudentsSearch] = useState('')
+
+  // Modal thêm sinh viên vào lớp học phần (POST /api/course-sections/{sectionId}/students)
+  const [enrollingSection, setEnrollingSection] = useState<ApiCourseSectionItem | null>(null)
 
   // Modal danh sách loại điểm của một học phần (GET /api/course-sections/{sectionId}/grade-components)
   const [viewingGradeComponentsSection, setViewingGradeComponentsSection] = useState<ApiCourseSectionItem | null>(null)
@@ -1302,6 +1307,14 @@ export const AdminSectionsView: React.FC = () => {
                             <span>Danh sách SV</span>
                           </button>
                           <button
+                            onClick={() => setEnrollingSection(sec)}
+                            className="px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1 border border-blue-200/60"
+                            title="Thêm sinh viên vào lớp học phần này (POST /api/course-sections/{id}/students)"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>+ Thêm SV</span>
+                          </button>
+                          <button
                             onClick={() => setSelectedSection(sec)}
                             className="px-2.5 py-1 text-[11px] font-semibold text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1"
                           >
@@ -1682,13 +1695,32 @@ export const AdminSectionsView: React.FC = () => {
                   <Users className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-800 text-sm sm:text-base flex items-center gap-2">
+                  <h3 className="font-extrabold text-slate-800 text-sm sm:text-base flex items-center gap-2 flex-wrap">
                     <span>Danh Sách Sinh Viên Lớp:</span>
                     <span className="text-blue-600 font-mono">{viewingStudentsSection.sectionCode}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700">
+                      GET /api/course-sections/students
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700">
+                      POST API
+                    </span>
                   </h3>
-                  <p className="text-[11px] text-slate-500">
-                    {viewingStudentsSection.courseName || viewingStudentsSection.courseCode} • {viewingStudentsSection.semesterName}
-                  </p>
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5 flex-wrap">
+                    <span>{viewingStudentsSection.courseName || viewingStudentsSection.courseCode} • {viewingStudentsSection.semesterName}</span>
+                    <span className="text-slate-300">•</span>
+                    <span className="font-bold text-slate-700">
+                      Sĩ số: {studentsTotalCount} / {viewingStudentsSection.capacity} SV
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        viewingStudentsSection.status === 'Open'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
+                      {viewingStudentsSection.status === 'Open' ? 'Đang mở đăng ký' : viewingStudentsSection.status || 'Mở'}
+                    </span>
+                  </div>
                 </div>
               </div>
               <button
@@ -1699,7 +1731,7 @@ export const AdminSectionsView: React.FC = () => {
               </button>
             </div>
 
-            {/* Modal Toolbar: Search, Size, Refresh */}
+            {/* Modal Toolbar: Search, Size, Refresh & Add Student Button */}
             <div className="p-4 border-b border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
               <div className="relative flex-1 w-full max-w-sm">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1712,7 +1744,17 @@ export const AdminSectionsView: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+              <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setEnrollingSection(viewingStudentsSection)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  title="Thêm sinh viên mới vào lớp học phần này (POST /api/course-sections/{sectionId}/students)"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>+ Thêm sinh viên vào lớp</span>
+                </button>
+
                 <select
                   value={studentsPageSize}
                   onChange={e => handleStudentsPageSizeChange(Number(e.target.value))}
@@ -2644,6 +2686,30 @@ export const AdminSectionsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Thêm Sinh Viên Vào Lớp Học Phần (POST /api/course-sections/{sectionId}/students) */}
+      <AddStudentToSectionModal
+        isOpen={!!enrollingSection}
+        section={enrollingSection}
+        currentEnrolledCount={
+          enrollingSection && viewingStudentsSection && enrollingSection.id === viewingStudentsSection.id
+            ? studentsTotalCount
+            : undefined
+        }
+        onClose={() => setEnrollingSection(null)}
+        onSuccess={result => {
+          showToast(
+            `Đã ghi danh thành công sinh viên ${result.studentCode} vào lớp ${enrollingSection?.sectionCode}!`
+          )
+          // Nếu đang mở danh sách sinh viên của chính lớp này, nạp lại dữ liệu ngay lập tức
+          if (viewingStudentsSection && enrollingSection && viewingStudentsSection.id === enrollingSection.id) {
+            fetchSectionStudents(viewingStudentsSection.id, 1, studentsPageSize)
+          }
+          // Nạp lại danh sách lớp học phần để cập nhật sĩ số
+          fetchCourseSections(page, pageSize)
+        }}
+        apiBaseUrl={baseUrl}
+      />
 
       {/* Toast */}
       {toastMessage && (

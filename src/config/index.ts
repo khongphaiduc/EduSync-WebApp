@@ -57,6 +57,8 @@ export const getLecturerCourseSectionsUrl = (page = 1, pageSize = 20) =>
   `${appConfig.apiBaseUrl}/api/lecturers/me/course-sections?page=${page}&pageSize=${pageSize}`
 export const getCourseSectionStudentsUrl = (sectionId: string, page = 1, pageSize = 20) =>
   `${appConfig.apiBaseUrl}/api/course-sections/${sectionId}/students?page=${page}&pageSize=${pageSize}`
+export const getAddStudentToSectionUrl = (sectionId: string) =>
+  `${appConfig.apiBaseUrl}/api/course-sections/${sectionId}/students`
 export const getGradeComponentsUrl = (sectionId: string) =>
   `${appConfig.apiBaseUrl}/api/course-sections/${sectionId}/grade-components`
 export const getLecturerScheduleUrl = (

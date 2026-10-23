@@ -14,10 +14,12 @@ import {
   X,
   Eye,
   Server,
+  Plus,
   Filter
 } from 'lucide-react'
-import type { ApiStudentItem, ApiStudentListResponse } from '../types'
-import { API_BASE_URL } from '../config'
+import type { ApiStudentItem, ApiStudentListResponse, ApiMajorItem, ApiMajorListResponse } from '../types'
+import { API_BASE_URL, getMajorsUrl } from '../config'
+import { CreateStudentModal } from './admin/CreateStudentModal'
 
 // Dữ liệu mẫu dùng cho chế độ xem trước (Offline Preview) khi backend chưa khởi động
 const MOCK_DEMO_STUDENTS: ApiStudentItem[] = [
@@ -78,9 +80,20 @@ const MOCK_DEMO_STUDENTS: ApiStudentItem[] = [
   }
 ]
 
-export const StudentsView: React.FC = () => {
+interface StudentsViewProps {
+  refreshTrigger?: number
+  onStudentCreated?: () => void
+  showAddButton?: boolean
+}
+
+export const StudentsView: React.FC<StudentsViewProps> = ({
+  refreshTrigger,
+  onStudentCreated,
+  showAddButton = true
+}) => {
   // Trạng thái dữ liệu sinh viên từ API
   const [students, setStudents] = useState<ApiStudentItem[]>([])
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false)
   const [page, setPage] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(20)
   const [totalCount, setTotalCount] = useState<number>(0)
@@ -99,8 +112,47 @@ export const StudentsView: React.FC = () => {
   const [selectedMajor, setSelectedMajor] = useState('ALL')
   const [selectedStatus, setSelectedStatus] = useState('ALL')
 
+  // Danh sách chuyên ngành từ GET /api/majors
+  const [majorsList, setMajorsList] = useState<ApiMajorItem[]>([])
+
   // Chi tiết sinh viên đang mở modal
   const [selectedStudent, setSelectedStudent] = useState<ApiStudentItem | null>(null)
+
+  // Nạp danh sách chuyên ngành từ GET /api/majors
+  const fetchMajors = useCallback(async (targetBase = baseUrl) => {
+    try {
+      const cleanBase = targetBase.replace(/\/+$/, '')
+      const endpoint = cleanBase ? `${cleanBase}/api/majors` : getMajorsUrl()
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      })
+      if (res.ok) {
+        const json: ApiMajorListResponse = await res.json()
+        if (json.success && Array.isArray(json.data)) {
+          setMajorsList(json.data)
+        }
+      }
+    } catch {
+      // offline fallback
+    }
+  }, [baseUrl])
+
+  useEffect(() => {
+    fetchMajors(baseUrl)
+  }, [baseUrl, fetchMajors])
+
+  const majorNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    majorsList.forEach(m => {
+      map.set(m.id, m.majorName)
+    })
+    return map
+  }, [majorsList])
 
   // Hàm gọi API GET /api/students?page=1&pageSize=20
   const fetchStudents = useCallback(
@@ -185,10 +237,10 @@ export const StudentsView: React.FC = () => {
     [page, pageSize, baseUrl]
   )
 
-  // Gọi API lần đầu khi component mount hoặc khi baseUrl thay đổi
+  // Gọi API lần đầu khi component mount, khi baseUrl thay đổi hoặc khi refreshTrigger kích hoạt
   useEffect(() => {
     fetchStudents(1, pageSize, baseUrl)
-  }, [baseUrl, fetchStudents, pageSize])
+  }, [baseUrl, fetchStudents, pageSize, refreshTrigger])
 
   // Lọc danh sách sinh viên theo search, ngành học, trạng thái
   const filteredStudents = useMemo(() => {
@@ -198,21 +250,26 @@ export const StudentsView: React.FC = () => {
         st.studentCode.toLowerCase().includes(search.toLowerCase()) ||
         st.email.toLowerCase().includes(search.toLowerCase())
 
-      const matchMajor = selectedMajor === 'ALL' || st.majorName === selectedMajor
+      const stMajor = st.majorName || majorNameMap.get(st.majorId) || ''
+      const matchMajor = selectedMajor === 'ALL' || stMajor === selectedMajor
       const matchStatus = selectedStatus === 'ALL' || st.status === selectedStatus
 
       return matchSearch && matchMajor && matchStatus
     })
-  }, [students, search, selectedMajor, selectedStatus])
+  }, [students, search, selectedMajor, selectedStatus, majorNameMap])
 
   // Danh sách các chuyên ngành xuất hiện trong dữ liệu để lọc
   const majorOptions = useMemo(() => {
     const set = new Set<string>()
+    majorsList.forEach(m => {
+      if (m.majorName) set.add(m.majorName)
+    })
     students.forEach(s => {
-      if (s.majorName) set.add(s.majorName)
+      const name = s.majorName || majorNameMap.get(s.majorId)
+      if (name) set.add(name)
     })
     return Array.from(set)
-  }, [students])
+  }, [majorsList, students, majorNameMap])
 
   // Chuyển trang
   const handlePageChange = (newPage: number) => {
@@ -302,11 +359,22 @@ export const StudentsView: React.FC = () => {
           {/* Export Excel Button */}
           <button
             onClick={() => alert(`Xuất danh sách ${filteredStudents.length} sinh viên sang định dạng Excel thành công!`)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-4 h-4 text-slate-500" />
             <span>Xuất Excel</span>
           </button>
+
+          {/* Add Student Button */}
+          {showAddButton && (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Thêm sinh viên</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -609,7 +677,7 @@ export const StudentsView: React.FC = () => {
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-slate-700 flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                        <span>{st.majorName || 'Chưa phân ngành'}</span>
+                        <span>{st.majorName || majorNameMap.get(st.majorId) || 'Chưa phân ngành'}</span>
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono mt-0.5">
                         Mã ngành: {st.majorId.substring(0, 8)}...
@@ -762,7 +830,9 @@ export const StudentsView: React.FC = () => {
               </div>
               <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
                 <span className="text-slate-400">Ngành học:</span>
-                <span className="font-bold text-blue-600">{selectedStudent.majorName}</span>
+                <span className="font-bold text-blue-600">
+                  {selectedStudent.majorName || majorNameMap.get(selectedStudent.majorId) || 'Chưa phân ngành'}
+                </span>
               </div>
               <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
                 <span className="text-slate-400">Mã ngành (Major ID):</span>
@@ -803,6 +873,17 @@ export const StudentsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Thêm sinh viên mới (POST /api/students) */}
+      <CreateStudentModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        apiBaseUrl={baseUrl}
+        onSuccess={() => {
+          fetchStudents(1, pageSize, baseUrl)
+          onStudentCreated?.()
+        }}
+      />
     </div>
   )
 }

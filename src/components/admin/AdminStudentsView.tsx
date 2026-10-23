@@ -7,44 +7,24 @@ import {
   AlertTriangle,
   GraduationCap,
   UserCheck,
-  X,
   CheckCircle2
 } from 'lucide-react'
 import { StudentsView } from '../StudentsView'
+import { CreateStudentModal } from './CreateStudentModal'
 
 export const AdminStudentsView: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [newStudent, setNewStudent] = useState({
-    studentCode: '',
-    fullName: '',
-    email: '',
-    major: 'Computer Science',
-    enrollmentYear: 2026,
-    phoneNumber: ''
-  })
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0)
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
-    setTimeout(() => setToastMessage(null), 3000)
+    setTimeout(() => setToastMessage(null), 3500)
   }
 
-  const handleAddStudent = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newStudent.studentCode || !newStudent.fullName || !newStudent.email) {
-      alert('Vui lòng điền đầy đủ các trường thông tin bắt buộc.')
-      return
-    }
-    setIsAddModalOpen(false)
-    showToast(`Đã thêm sinh viên ${newStudent.fullName} (${newStudent.studentCode}) thành công!`)
-    setNewStudent({
-      studentCode: '',
-      fullName: '',
-      email: '',
-      major: 'Computer Science',
-      enrollmentYear: 2026,
-      phoneNumber: ''
-    })
+  const handleStudentCreated = () => {
+    setRefreshTrigger(prev => prev + 1)
+    showToast('Tạo hồ sơ và cấp tài khoản sinh viên thành công!')
   }
 
   return (
@@ -56,10 +36,10 @@ export const AdminStudentsView: React.FC = () => {
             <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
               <Users className="w-5 h-5" />
             </div>
-            Quản Lý Hồ Sơ 1,254 Sinh Viên (Phòng Đào Tạo)
+            Quản Lý Hồ Sơ Sinh Viên (Phòng Đào Tạo)
           </h1>
           <p className="text-xs text-slate-400 mt-1 pl-12.5">
-            Quản trị thông tin sinh viên toàn trường, tra cứu học vụ, điểm rèn luyện và cảnh báo học vụ
+            Quản trị thông tin sinh viên toàn trường, tra cứu học vụ và tạo tài khoản sinh viên mới (POST /api/students)
           </p>
         </div>
 
@@ -138,133 +118,14 @@ export const AdminStudentsView: React.FC = () => {
       </div>
 
       {/* Main Students Directory / View */}
-      <StudentsView />
+      <StudentsView refreshTrigger={refreshTrigger} showAddButton={false} />
 
-      {/* Modal Thêm sinh viên mới */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Plus className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-800 text-sm">Thêm sinh viên mới</h3>
-                  <p className="text-[11px] text-slate-400">Tạo hồ sơ sinh viên vào hệ thống Harvard University</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddStudent} className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                    Mã sinh viên (MSSV) <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: STU007"
-                    value={newStudent.studentCode}
-                    onChange={e => setNewStudent({ ...newStudent, studentCode: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                    Năm nhập học <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    value={newStudent.enrollmentYear}
-                    onChange={e => setNewStudent({ ...newStudent, enrollmentYear: Number(e.target.value) })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                  Họ và tên sinh viên <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="VD: Nguyễn Văn Hoàng"
-                  value={newStudent.fullName}
-                  onChange={e => setNewStudent({ ...newStudent, fullName: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                    Email trường cấp <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="hoang.nguyen@example.com"
-                    value={newStudent.email}
-                    onChange={e => setNewStudent({ ...newStudent, email: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Số điện thoại</label>
-                  <input
-                    type="text"
-                    placeholder="0912 345 678"
-                    value={newStudent.phoneNumber}
-                    onChange={e => setNewStudent({ ...newStudent, phoneNumber: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Chuyên ngành đào tạo</label>
-                <select
-                  value={newStudent.major}
-                  onChange={e => setNewStudent({ ...newStudent, major: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                >
-                  <option value="Computer Science">Khoa học máy tính (Computer Science)</option>
-                  <option value="Software Engineering">Kỹ thuật phần mềm (Software Engineering)</option>
-                  <option value="Artificial Intelligence">Trí tuệ nhân tạo (AI)</option>
-                  <option value="Information Security">An toàn thông tin</option>
-                  <option value="Business Administration">Quản trị kinh doanh</option>
-                </select>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-600/20 transition-all cursor-pointer"
-                >
-                  Lưu sinh viên
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal Thêm sinh viên mới (POST /api/students) */}
+      <CreateStudentModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={handleStudentCreated}
+      />
 
       {/* Toast Feedback */}
       {toastMessage && (

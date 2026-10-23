@@ -16,6 +16,8 @@ export const API_BASE_URL = appConfig.apiBaseUrl
 export const LOGIN_URL = `${appConfig.apiBaseUrl}${appConfig.authEndpoint}`
 export const getStudentsUrl = (page = 1, pageSize = 20) =>
   `${appConfig.apiBaseUrl}/api/students?page=${page}&pageSize=${pageSize}`
+export const getCreateStudentUrl = () => `${appConfig.apiBaseUrl}/api/students`
+export const getMajorsUrl = () => `${appConfig.apiBaseUrl}/api/majors`
 export const getLecturersUrl = (page = 1, pageSize = 20) =>
   `${appConfig.apiBaseUrl}/api/lecturers?page=${page}&pageSize=${pageSize}`
 export const getCreateLecturerUrl = () => `${appConfig.apiBaseUrl}/api/lecturers`

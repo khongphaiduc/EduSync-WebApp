@@ -143,6 +143,37 @@ export interface ApiStudentListResponse {
   data?: ApiStudentListData
 }
 
+export interface ApiMajorItem {
+  id: string
+  majorCode: string
+  majorName: string
+  description?: string | null
+}
+
+export interface ApiMajorListResponse {
+  success: boolean
+  message: string
+  data?: ApiMajorItem[]
+}
+
+export interface CreateStudentRequest {
+  email: string
+  password?: string
+  studentCode: string
+  fullName: string
+  majorId: string
+  enrollmentYear: number
+  dateOfBirth?: string
+  gender?: string
+  phone?: string
+}
+
+export interface CreateStudentResponse {
+  success: boolean
+  message: string
+  data?: ApiStudentItem | { id: string }
+}
+
 export interface ApiLecturerItem {
   id: string
   userId: string
